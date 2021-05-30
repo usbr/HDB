@@ -15,4 +15,3 @@ temporary tablespace HDB_temp;
 grant create session to meta_data_user;
 grant connect to meta_data_user;
 
-

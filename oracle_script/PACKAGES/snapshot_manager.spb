@@ -1,0 +1,75 @@
+
+CREATE OR REPLACE PACKAGE BODY SNAPSHOT_MANAGER AS 
+  
+   PROCEDURE SNAPSHOT_MODIFIED(
+    P_TABLE_NAME VARCHAR2 ) IS
+
+      /* the local variables         */
+      l_procedure_indicator varchar2(100);
+      
+ BEGIN
+/*  This procedure was written to assist in the maintenance of the Master/SLave table/snapshot
+    situation at several HDB sites.
+    this procedure written by Mark Bogner   April 2013
+    */
+
+    l_procedure_indicator := 'SNAPSHOT_MODIFIED FAILED FOR: ';
+/*  first do error checking  */
+    IF P_TABLE_NAME IS NULL THEN 
+		DENY_ACTION(l_procedure_indicator || 'INVALID <NULL> TABLE_NAME');
+    END IF;
+	
+	/* insert the tablename into the generic database list table  */
+	INSERT INTO REF_DB_GENERIC_LIST (RECORD_KEY, RECORD_KEY_VALUE1) VALUES
+    (G_SNAPSHOT_MANAGER_KEY, UPPER(P_TABLE_NAME));
+	
+  END; /*  snapshot_modified procedure  */
+
+  PROCEDURE PERFORM_REFRESH(P_TABLE_NAME VARCHAR2)
+   IS
+     l_table_names VARCHAR2(512);
+     l_procedure_indicator varchar2(100);
+     l_count number;
+   BEGIN
+    /*  This procedure was written to perform the required refreshes based on the input 
+        parameter or the entries for snapshot manager in the table ref_db_generic_list
+        
+        this procedure written by Mark Bogner   April 2013                            */
+
+    l_procedure_indicator := 'PERFORM_REFRESH FAILED FOR: ';
+/*  first do error checking  */
+    IF P_TABLE_NAME IS NULL THEN 
+		DENY_ACTION(l_procedure_indicator || 'INVALID <NULL> TABLE_NAME');
+    END IF;
+	
+/* set the l_table_name that will be used to call the remote refresh procedures */    
+    IF UPPER(P_TABLE_NAME) = 'ALL' THEN 
+      l_table_names := 'ALL';
+     ELSIF P_TABLE_NAME = '%' THEN
+      select listagg(table_name, ',') WITHIN GROUP (ORDER BY table_name) into l_table_names from 
+      (select distinct record_key_value1 "TABLE_NAME" from ref_db_generic_list 
+       where record_key = G_SNAPSHOT_MANAGER_KEY);       
+     ELSE l_table_names := P_TABLE_NAME;
+    END IF;
+
+/*  see if there is any work to do                         */
+    select count(*) into l_count from ref_db_generic_list 
+       where record_key = G_SNAPSHOT_MANAGER_KEY
+       and record_key_value1 LIKE decode(l_table_names,'ALL','%',l_table_names);    
+
+   IF l_count > 0 THEN
+     /* call the remote refresh procedures */
+     refresh_hdb_snap(l_table_names);
+     refresh_hdb_snap2(l_table_names);
+   END IF;
+   
+/* Clean up the SNAPSHOT MANAGER ENTRIES IN the REF_DB_GENERIC_LIST TABLE  */
+   delete from REF_DB_GENERIC_LIST where record_key = G_SNAPSHOT_MANAGER_KEY
+   and record_key_value1 LIKE decode(UPPER(P_TABLE_NAME),'ALL','%','%','%',l_table_names);    
+        
+    END;  /* End of Procedure PERFORM_REFRESH  */     
+
+END SNAPSHOT_MANAGER;  /* Package End  */
+
+.
+/

@@ -1,0 +1,247 @@
+
+CREATE OR REPLACE PACKAGE BODY PRE_PROCESSOR AS 
+
+   PROCEDURE PREPROCESSOR(
+    SDI NUMBER,
+    INTERVAL_PERIOD         VARCHAR2,
+    START_TIME  DATE,
+    RESULT IN OUT FLOAT,
+    VALIDATION IN OUT CHAR,
+    DATA_FLAGS IN OUT VARCHAR2) IS
+	procedure_indicator varchar2(100);
+    END_TIME_TEMP DATE;
+	temp_chars varchar2(100);
+	sql_stmt varchar2(1000);
+	result_chars varchar2(100);
+	result_value number;
+	start_time_chars  varchar2(100);
+    equation_stmt     varchar2(1000);
+    
+ BEGIN
+/*  This procedure was written to assist in "pre-processing" a record in HDB
+    so that the pre-processing can re-calculate an input value based on a user defined
+    equation
+    
+    this procedure written by Mark Bogner   October 2008         
+    sysdate replaced with start_time in equation statement by CarolM. August 2017
+
+*/
+   
+	procedure_indicator := 'PREPROCESSOR FAILED FOR: ';
+/*  first do error checking  */
+    IF SDI IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> SITE_DATATYPE_ID');
+	ELSIF INTERVAL_PERIOD IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> INTERVAL');
+	ELSIF START_TIME IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> START_DATE_TIME');
+	ELSIF RESULT is NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> RESULT');
+    END IF;
+
+/* validate the interval via a select from the hdb_interval table  */
+    BEGIN
+      select interval_name into temp_chars
+        from hdb_interval
+        where interval_name = INTERVAL_PERIOD;
+       exception when others then 
+       DENY_ACTION(procedure_indicator || 'INVALID ' || INTERVAL_PERIOD || ' INTERVAL');
+    END;
+
+	/* go see if there is an equation for the pre-processor */
+	/*  if not, then just return							*/
+    BEGIN
+      select preprocessor_equation into equation_stmt
+        from ref_interval_copy_limits
+        where site_datatype_id = SDI 
+         and interval = INTERVAL_PERIOD
+         and effective_start_date_time <= start_time
+         and nvl(effective_end_date_time,sysdate) >= start_time
+         and preprocessor_equation is not null;
+       exception when others then        
+	   RETURN;
+    END;
+		
+		/*equation_stmt := '<<value>> * 3.145';*/
+		/*equation_stmt := '(sysdate - 5) - <<tsbt>>'; */
+		
+		/* we have an equation , so do some substitution  */
+		equation_stmt := replace(equation_stmt,'<<value>>',to_char(round(result,7)));	
+		equation_stmt := replace(equation_stmt,'<<tsbt>>','to_date(''' || 
+	-- sysdate replaced with start_time
+		to_char(start_time,'dd-mon-yyyy hh24:mi:ss') || ''',''dd-mon-yyyy hh24:mi:ss'')');
+		sql_stmt := 'select ' || equation_stmt || ' from dual';
+
+	BEGIN
+		/* now we have the calculation figured out so submit the statement to get the result  */
+		execute immediate (sql_stmt) into result_value;
+        exception when others then 
+			/*  set the return parameters to indicate failure, leave result the same  */
+			validation := 'F';
+			data_flags := 'FAILED PREPROCESSOR';
+            /* deny_action(sqlerrm);  removed testing purposes only */
+   			RETURN;
+	END;  
+	
+	/* so things should have succeeded here so finish up and return  */
+	result := result_value;
+	/*deny_action('PASSED !!!! ' || sql_stmt||'  : '|| to_char(result));*/
+	
+  END; /*  preprocessor procedure  */
+
+
+PROCEDURE delete_matching_records(
+    SDI				 NUMBER,
+    INTERVAL_PERIOD  VARCHAR2,
+    START_TIME       DATE,
+    END_TIME         DATE,
+    P_VALIDATION     VARCHAR2 DEFAULT '%') IS
+    delete_stmt varchar2(2000);
+BEGIN
+/*  This procedure was written to be the interface to 
+    HDB in order to reprocess records currently existing in R_BASE
+    The records in R_BASE are scheduled to be re-processed and 
+    this procedure will also delete any records in the corresponding
+    interval table that failed the reprocessing if requested with
+    the P_DO_INTERVAL_DELETE parameter set to "Y"
+                          
+    this procedure written by Mark Bogner   October 2008          */
+/* modified by M. Bogner, SUtron Corporation October 2011 to process 
+   things differently                                             */
+   
+/* create a dynamic sql statement that will delete the records from 
+   the r_ interval table that currently exists in r_base based on 
+   the passed in sdi, interval and dates.                         */
+   
+   delete_stmt := 
+   'delete from r_' || INTERVAL_PERIOD || ' tbl1 where exists ' || 
+   ' ( select ''x'' from r_base where site_datatype_id = ' || to_char(SDI) ||
+   ' and start_date_time >= to_date(''' ||
+   to_char(START_TIME,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')' ||
+   ' and start_date_time <= to_date(''' ||
+   to_char(END_TIME,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')' ||
+   ' and interval = ''' || INTERVAL_PERIOD || '''' ||
+   ' and validation LIKE ''' || P_VALIDATION || '''' ||
+   ' and site_datatype_id = tbl1.site_datatype_id ' ||
+   ' and start_date_time = tbl1.start_date_time )';
+
+/* now execute this dynamic sql statement */
+  BEGIN 
+		execute immediate (delete_stmt); 
+   /* deny_action(delete_stmt);  removed for testing only  */
+		exception when others then 
+		null;
+  END;
+
+END; /*  delete_matching_records procedures  */
+
+
+   PROCEDURE REVERIFICATION(
+    P_SDI NUMBER,
+    P_INTERVAL_PERIOD         VARCHAR2,
+    P_START_TIME  DATE,
+    P_END_TIME    DATE DEFAULT NULL,
+    P_DO_INTERVAL_DELETE VARCHAR2 DEFAULT 'N') IS
+    
+    CURSOR get_rbase_data(sdi NUMBER, intvl VARCHAR2, sdt DATE, edt DATE) IS  
+    select *
+    from r_base where site_datatype_id = sdi and interval = intvl 
+    and start_date_time between sdt and edt;
+	
+	procedure_indicator varchar2(100);
+    END_TIME_TEMP DATE;
+	temp_chars varchar2(100);
+    VALIDATION_NEW		R_BASE.VALIDATION%TYPE;
+    DATA_FLAGS_NEW		R_BASE.DATA_FLAGS%TYPE;
+    RESULTS_NEW		    R_BASE.VALUE%TYPE;
+
+ BEGIN
+/*  This procedure was written to assist in "reverifying" a record in HDB
+    so that the processing acts as if the data for the specified time 
+    period was re-entered into the system.  
+                      
+    this procedure written by Mark Bogner   October 2008          */
+
+/* modified by M. Bogner, Sutron Corporation for Lower Colorado and Reno to work
+   as intended, but to change the processing a little to be less intrusive
+   to the r_base data and only delete from the interval table only what
+   is necessary and if requested. This procedure will call modify_r_base
+   for all records with the specified input_parameters                            */
+   
+	procedure_indicator := 'REVERIFICATION FAILED FOR: ';
+/*  do input parameter error checking  */
+    IF P_SDI IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> SITE_DATATYPE_ID');
+	ELSIF P_INTERVAL_PERIOD IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> INTERVAL');
+	ELSIF P_START_TIME IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> START_DATE_TIME');
+	ELSIF P_END_TIME < P_START_TIME THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID (< START_TIME) END_TIME');
+    END IF;
+
+/* validate the interval via a select from the hdb_interval table  */
+    BEGIN
+      select interval_name into temp_chars
+        from hdb_interval
+        where interval_name = P_INTERVAL_PERIOD;
+       exception when others then 
+       DENY_ACTION(procedure_indicator || 'INVALID ' || P_INTERVAL_PERIOD || ' INTERVAL');
+    END;
+
+/*  if end time was passed in null or used default null then set to start_time  */
+	END_TIME_TEMP := P_END_TIME;
+	IF P_END_TIME IS NULL THEN 
+	  END_TIME_TEMP := P_START_TIME;
+	END IF;
+	
+	/* roll through all the r_base records for the input with preprocessor values */
+    /* and do the revierification by calling modify_r_base                        */
+    FOR p1 IN get_rbase_data(P_SDI,P_INTERVAL_PERIOD,P_START_TIME,END_TIME_TEMP) LOOP
+      
+      /* call modify_r_base with the cursor values */
+      MODIFY_R_BASE (p1.site_datatype_id,p1.interval,p1.start_date_time, p1.end_date_time,
+        p1.value,p1.agen_id,p1.overwrite_flag,'',p1.collection_system_id,p1.loading_application_id,
+        p1.method_id,p1.computation_id,'Y','RV');
+        		
+	END LOOP;   /*  end of the r_base cursor loop  */
+    
+    IF P_DO_INTERVAL_DELETE = 'Y' THEN	
+	  /* delete any matching records in the interval table  that failed the reverification */
+ 	  DELETE_MATCHING_RECORDS(P_SDI,P_INTERVAL_PERIOD,P_START_TIME,END_TIME_TEMP,'F');
+    END IF;
+    
+    /* finally do a commit since this procedure was successful and 
+       a commit will reduce possible deadlock issues  */
+    commit;
+	
+  END; /*  reverification procedure  */
+
+
+ 
+PROCEDURE TEST_PACKAGE(
+    SDI				 NUMBER,
+    INTERVAL_PERIOD	 VARCHAR2,
+    START_TIME       DATE,
+    END_TIME         DATE) IS
+    delete_stmt varchar2(2000);
+BEGIN
+ 
+ /* This procedure is only to be used to test the procedures in this package  */
+ /* this procedure written by Mark Bogner   October 2008          */
+  
+ /* enter the procedure calls to test below here  */
+ 
+ /*delete_matching_records(SDI,INTERVAL_PERIOD,START_TIME,END_TIME);*/
+ null;
+
+END; /* TEST_PACKAGE */
+
+
+
+END PRE_PROCESSOR;  /* Package End  */
+
+.
+/

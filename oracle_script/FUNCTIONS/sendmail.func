@@ -1,0 +1,28 @@
+create or replace FUNCTION SENDMAIL(
+      P_ADDRESS VARCHAR2,
+	  P_TEXT VARCHAR2) 
+	RETURN Number IS
+		l_return_value NUMBER;
+		l_sender VARCHAR2(100) := 'echdba@ibr6ecadb001.bor.doi.net';
+		l_subject VARCHAR2(100) := 'HDB Notification';
+	BEGIN 
+	/* this function sends an email using the utl_send procedure
+	*/
+	
+	/*  this function written by M. Bogner  05/03/2013  */
+		begin
+		l_return_value := 1;
+        UTL_MAIL.SEND(sender => l_sender, 
+                      recipients => P_ADDRESS,
+                      subject => l_subject, 
+                      message => P_TEXT );		
+		exception when others then l_return_value := sqlcode();
+		end;
+		
+	   return (l_return_value);
+	END;
+.
+/
+
+create or replace public synonym SENDMAIL for SENDMAIL;
+grant execute on SENDMAIL to public;

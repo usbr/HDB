@@ -1,0 +1,7 @@
+create sequence ref_db_generic_list_sequence start with 1 nocache;
+
+
+/*  create the synonymns and priveleges for the sequences previously created  */
+grant select on ref_db_generic_list_sequence to public;
+create public synonym ref_db_generic_list_sequence for ref_db_generic_list_sequence;
+

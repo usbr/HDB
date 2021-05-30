@@ -1,0 +1,40 @@
+create or replace
+function gscm 
+(
+  site in number,  
+  attr in number,
+  mon in date default sysdate,
+  idx in number DEFAULT 1,
+  eff_date in date default sysdate
+) return number IS
+return_value NUMBER;
+begin
+/* this function returns the coefficient value in the ref_site_coef_month table
+with the input site, attribute id, month, index, and effective date
+  why is effective date a required column in ref_site_coef_month, if it's not in the PK?
+*/
+
+/*  this function written by A. Gilmore  07/03/2013, shamelessly stolen from Mark...  */
+begin
+  return_value := NULL;
+  select a.coef  into return_value
+  from ref_site_coef_month a
+  where a.site_id = site
+    and a.attr_id = attr
+    and a.month = extract(MONTH from mon)
+    and a.coef_idx = idx
+    and eff_date >= a.effective_start_date_time
+    and eff_date <= nvl(a.effective_end_date_time,sysdate);
+
+exception when others then return_value := NULL;
+end;
+
+return (return_value);
+  
+end gscm;
+.
+/
+
+create public synonym gscm for gscm;
+grant execute on gscm to public;
+

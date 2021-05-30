@@ -1,0 +1,20 @@
+set echo on
+set feedback on
+spool hdb_views.out
+
+start ./VIEWS/acl_view.view
+start ./VIEWS/engineeringunit.view
+start ./VIEWS/decodes_site.view
+start ./VIEWS/decodes_sitename.view
+start ./VIEWS/hdb_computed_datatype.view
+start ./VIEWS/cp_active_sdi_tsparm_view.view
+start ./VIEWS/cp_active_remote_sdi_view.view
+start ./VIEWS/cp_input_output_view.view
+start ./VIEWS/days.view
+start ./VIEWS/dba_roles.view
+start ./VIEWS/hdb_datatype_unit.view
+start ./VIEWS/hdb_site_datatype_name.view
+
+
+spool off
+exit;

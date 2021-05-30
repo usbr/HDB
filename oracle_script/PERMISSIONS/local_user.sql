@@ -1,3 +1,7 @@
+set echo on
+set feedback on
+spool local_user.out
+
 /* Tom */
 /* create user tom identified by tom */
 /* default tablespace HDB_user quota unlimited on HDB_user */
@@ -19,6 +23,7 @@
 /* grant connect to coroneos; */
 
 
+spool off
 
-
+exit;
 

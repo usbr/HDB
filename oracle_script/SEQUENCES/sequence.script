@@ -1,0 +1,10 @@
+set echo on
+set feedback on
+spool hdb_sequences.out
+
+start ./SEQUENCES/hdb_site_sequence.seq;
+start ./SEQUENCES/ref_site_rating_sequence.seq;
+start ./SEQUENCES/ref_db_generic_list_sequence.seq;
+
+spool off
+exit;

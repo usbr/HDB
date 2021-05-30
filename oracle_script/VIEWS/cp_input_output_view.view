@@ -1,0 +1,111 @@
+create or replace view  cp_input_output_view
+("COMPUTATION_ID","INPUT_TSID","INPUT_SDI","INPUT_INTERVAL","INPUT_TABLE_SELECTOR","INPUT_MODEL_ID",
+ "INPUT_DELTA_T","INPUT_DELTA_T_UNITS",
+ "OUTPUT_TSID","OUTPUT_SDI","OUTPUT_INTERVAL","OUTPUT_TABLE_SELECTOR","OUTPUT_MODEL_ID","ENABLED")
+ as
+/* this view written by M. Bogner Sutron Corp April 2013
+   the purpose of this view is to select all active computations and the respective
+   input and output parameters' definitions for each defined calculation                                        
+   MODIFIED:  30-DECEMBER-2013 by M. Bogner to include DISABLED non-group computations
+   to aid in the query of computations in the OPENDCS application
+*/
+		select distinct
+        ccd.computation_id,  
+        cti.ts_id,
+	    cti.site_datatype_id, 
+        cti.interval,
+        cti.table_selector,
+        nvl(cti.model_id,-1),
+        ccts2.DELTA_T,
+        ccts2.DELTA_T_UNITS,
+        CP_PROCESSOR.GET_TS_ID(
+          decode(nvl(ccts.site_datatype_id,-1),-1,cti.site_datatype_id,ccts.site_datatype_id), 
+          ccts.interval,
+          ccts.table_selector,
+          ccts.model_id),
+	    decode(nvl(ccts.site_datatype_id,-1),-1,cti.site_datatype_id,ccts.site_datatype_id), 
+        ccts.interval,
+        ccts.table_selector,
+        nvl(ccts.model_id,-1),
+        'ENABLED'
+	from  cp_computation cc, cp_comp_ts_parm ccts, cp_algorithm ca, cp_comp_ts_parm ccts2,
+		  cp_algo_ts_parm catp, cp_comp_depends ccd, cp_ts_id cti
+	where
+		 cc.computation_id = ccd.computation_id
+    and  cti.ts_id = ccd.ts_id
+	and  cc.computation_id = ccts.computation_id
+	and  cc.algorithm_id = ca.algorithm_id
+	and  ca.algorithm_id = catp.algorithm_id
+	and  ccts.algo_role_name = catp.algo_role_name
+	and  catp.parm_type like 'o%'
+	and  ccts2.computation_id = ccts.computation_id
+UNION
+/* this union added 12/30/2014 by M. Bogner to get all enabled non-group computations with no output parametere */
+	select distinct
+     ccd.computation_id,  
+     cti.ts_id,
+	 cti.site_datatype_id, 
+     cti.interval,
+     cti.table_selector,
+     nvl(cti.model_id,-1),
+     ccts.DELTA_T,
+     ccts.DELTA_T_UNITS,
+     null,
+     null,
+     null,
+     null,
+     null,
+     'ENABLED (NO OUTPUT PARAMETER)'
+	from  cp_computation cc, cp_comp_ts_parm ccts, 
+        cp_comp_ts_parm ccts2,
+		    cp_comp_depends ccd, cp_ts_id cti
+	where
+         cc.computation_id = ccd.computation_id
+    and  cti.ts_id = ccd.ts_id
+	and  cc.computation_id = ccts.computation_id
+    and  cc.computation_id not in 
+    (select distinct
+        cc.computation_id  
+	from  cp_computation cc, cp_comp_ts_parm ccts, cp_algorithm ca,
+		  cp_algo_ts_parm catp
+	where
+	     cc.algorithm_id = ca.algorithm_id
+    and  cc.computation_id = ccts.computation_id
+	and  ca.algorithm_id = catp.algorithm_id
+	and  ccts.algo_role_name = catp.algo_role_name
+	and  catp.parm_type like 'o%')
+UNION
+/* this union added 12/30/2013 by M. Bogner to get all disabled non-group computations  */
+		select distinct
+        cc.computation_id,  
+        CP_PROCESSOR.GET_TS_ID(ccts.site_datatype_id, ccts.interval,ccts.table_selector,nvl(ccts.model_id,-1)),
+	    ccts.site_datatype_id, 
+        ccts.interval,
+        ccts.table_selector,
+        nvl(ccts.model_id,-1),
+        ccts.DELTA_T,
+        ccts.DELTA_T_UNITS,
+        CP_PROCESSOR.GET_TS_ID(ccts2.site_datatype_id, ccts2.interval,ccts2.table_selector,nvl(ccts2.model_id,-1)),
+	    ccts2.site_datatype_id, 
+        ccts2.interval,
+        ccts2.table_selector,
+        nvl(ccts2.model_id,-1),
+        'DISABLED'
+	from  cp_computation cc, cp_comp_ts_parm ccts, cp_algorithm ca1, cp_comp_ts_parm ccts2,
+		  cp_algo_ts_parm catp1, cp_algorithm ca2, cp_algo_ts_parm catp2
+	where
+		 NVL(cc.enabled,'N') <> 'Y'
+	and  cc.group_id is null
+	and  cc.computation_id = ccts.computation_id
+	and  cc.computation_id = ccts2.computation_id
+	and  cc.algorithm_id = ca1.algorithm_id
+	and  cc.algorithm_id = ca2.algorithm_id
+	and  ca1.algorithm_id = catp1.algorithm_id
+	and  ca2.algorithm_id = catp2.algorithm_id
+	and  ccts.algo_role_name = catp1.algo_role_name
+	and  ccts2.algo_role_name = catp2.algo_role_name
+	and  catp1.parm_type like 'i%'
+	and  catp2.parm_type like 'o%';
+
+create or replace public synonym cp_input_output_view for cp_input_output_view;
+grant select on cp_input_output_view to public;

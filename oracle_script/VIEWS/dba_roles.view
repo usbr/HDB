@@ -1,0 +1,7 @@
+CREATE OR REPLACE FORCE VIEW V_DBA_ROLES 
+ ( "ROLE"
+  )  AS 
+  select role from dba_roles
+where password_required = 'YES';
+
+grant select on V_DBA_ROLES to public;

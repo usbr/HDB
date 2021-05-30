@@ -35,9 +35,9 @@ CREATE OR REPLACE PROCEDURE insert_m_table (
  show errors;
 /
 
-create public synonym insert_m_table for insert_m_table;
+create or replace public synonym insert_m_table for insert_m_table;
 grant execute on insert_m_table to app_role;
 grant execute on insert_m_table to savoir_faire;
-grant execute on insert_m_table to model_role;
+grant execute on insert_m_table to model_priv_role;
 
 /

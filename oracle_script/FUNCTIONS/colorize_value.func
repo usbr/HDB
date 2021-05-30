@@ -1,0 +1,81 @@
+CREATE OR REPLACE FUNCTION colorize_value(value IN NUMBER,
+                                          overwrite IN VARCHAR2,
+                                          validation IN VARCHAR2,
+                                          method_id IN NUMBER,
+                                          derivation_flags IN VARCHAR2)
+RETURN VARCHAR2
+ /* This function returns a color name to apply to a cell containing
+       this value.
+       These color names are from the known named colors, originating with X11, 
+       but also present in web browsers, .NET, and elsewhere.
+       
+       Colors were chosen to keep more normally editted data in pale colors, 
+       while making failed validations and computation process outputs stand out
+       
+       LightGray - missing
+       Red - failed validation
+       SkyBlue - overwrite
+       Yellow - computation processor algorithm
+       MistyRose - derivation flags is not null
+       PaleGreen - none of the above
+       
+       Example colors at http://en.wikipedia.org/wiki/Web_colors
+       
+       Initially written by Andrew Gilmore, May 20, 2008
+    */
+IS
+/* Function to help display data for HDB Poet and other tools:
+   given a value and some information, return a color name to
+   show as a background for a cell containing that value.
+
+  Example query:
+  
+  select date_time, value, 
+  colorize_value(value, overwrite_flag, validation,method_id,
+  derivation_flags) as Color
+  from r_day, table(dates_between(TO_Date('05/14/2008', 'MM/dd/yyyy'),
+                                  TO_Date('05/19/2008', 'MM/dd/yyyy'),
+                                  'day')) dates
+  where
+  start_date_time(+) = dates.date_time and
+  site_datatype_id(+) = 1923
+  order by dates.date_time;
+  
+  Output:
+  
+  DATE_TIME	VALUE	COLOR
+14-MAY-08 00:00	7467.78	SkyBlue
+15-MAY-08 00:00	null	LightGray
+16-MAY-08 00:00	7400.09	MistyRose
+17-MAY-08 00:00	7469.35	PaleGreen
+18-MAY-08 00:00	7470.09	Yellow
+19-MAY-08 00:00	null	LightGray
+
+Red is not in this list because it only applies to failed validations,
+which are only in r_base.
+
+   */
+
+BEGIN
+  IF value IS NULL THEN
+    RETURN 'LightGray';
+  ELSIF validation = 'F' THEN
+    RETURN 'Red';
+  ELSIF overwrite IS NOT NULL THEN
+    RETURN 'SkyBlue';
+  ELSIF method_id = 21 THEN
+    RETURN 'Yellow';
+  ELSIF derivation_flags IS NOT NULL THEN
+    RETURN 'MistyRose';
+  ELSE
+    RETURN 'PaleGreen';
+  END IF;
+
+END colorize_value;
+.
+/
+show errors
+
+GRANT EXECUTE ON colorize_value TO PUBLIC;
+CREATE OR REPLACE PUBLIC SYNONYM colorize_value FOR colorize_value;
+

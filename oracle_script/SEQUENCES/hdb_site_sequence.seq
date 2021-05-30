@@ -1,0 +1,7 @@
+create sequence hdb_site_sequence start with 1 nocache;
+
+
+/*  create the synonymns and priveleges for the sequences previously created  */
+grant select on hdb_site_sequence to decodes_role;
+create public synonym SiteIdSeq for hdb_site_sequence;
+

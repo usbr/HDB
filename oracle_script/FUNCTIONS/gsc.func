@@ -1,0 +1,34 @@
+create or replace FUNCTION GSC(
+	  Site NUMBER,ATTR NUMBER,EFF_DATE DATE,IDX NUMBER DEFAULT 1) 
+	RETURN FLOAT IS
+		return_value FLOAT;
+	BEGIN 
+	/* this function returns the coefficient value in the ref_site_coef table 
+	with the input site, attribute id, index, and effective date
+	*/
+	
+	/*  this function written by M. Bogner  02/27/2008  */
+	/*  modified by M. bogner 3/14/2008 to return a null if no value is there  */
+	/*  modified by M. bogner 3/14/2008 to add the coef_idx to the parameter list and the query  */
+	/*  modified by M. bogner 4/1/2008 to make the coef_idx optional (defaults to 1)  */
+		begin
+		return_value := NULL;
+		select a.coef  into return_value
+		  from ref_site_coef a
+		  where a.site_id = site
+		  and a.attr_id = attr
+		  and a.coef_idx = idx
+		  and eff_date >= a.effective_start_date_time
+          and eff_date < nvl(a.effective_end_date_time,sysdate);
+		
+		exception when others then return_value := NULL;
+		end;
+		
+	   return (return_value);
+	END;
+.
+/
+
+show errors
+create public synonym gsc for gsc;
+grant execute on gsc to public;

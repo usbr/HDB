@@ -1,0 +1,15 @@
+CREATE OR REPLACE TYPE DATEARRAY as table of date;
+/
+
+CREATE OR REPLACE TYPE NUMBER_ARRAY as table of number;
+/
+
+CREATE OR REPLACE TYPE T_TF_ROW AS OBJECT (
+  row_dates DATE,
+  row_values NUMBER
+);
+/
+
+CREATE OR REPLACE TYPE T_TF_TAB IS TABLE OF t_tf_row;
+/
+

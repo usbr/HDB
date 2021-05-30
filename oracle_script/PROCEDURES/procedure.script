@@ -1,3 +1,7 @@
+set echo on
+set feedback on
+spool hdb_procedures.out
+
 start ./PROCEDURES/check_sdi_auth.prc;
 start ./PROCEDURES/check_sdi_auth_with_site.prc;
 start ./PROCEDURES/check_site_id_auth.prc;
@@ -20,30 +24,39 @@ start ./PROCEDURES/lookup_hydromet_sdi.prc;
 start ./PROCEDURES/lookup_sdi.prc;
 start ./PROCEDURES/modify_r_base_raw.prc;
 start ./PROCEDURES/modify_r_base.prc;
+start ./PROCEDURES/decodes_to_rbase.prc;
 start ./PROCEDURES/delete_m_table.prc;
 start ./PROCEDURES/insert_m_table.prc;
 start ./PROCEDURES/update_m_table_raw.prc;
 start ./PROCEDURES/modify_m_table_raw.prc;
+start ./PROCEDURES/modify_m_table.prc;
 start ./PROCEDURES/update_m_table.prc;
 start ./PROCEDURES/validate_sdi_interval.prc;
-start ./PROCEDURES/find_derivation_source.prc;
-start ./PROCEDURES/is_derivation_source.prc;
-start ./PROCEDURES/is_overwrite.prc;
 start ./PROCEDURES/create_site_data_map.prc;
 start ./PROCEDURES/get_site_data_map.prc;
-start ./PROCEDURES/model_is_coord.prc
-start ./PROCEDURES/get_next_model_run_id.prc
-start ./PROCEDURES/insert_coord_model_run_id.prc
-start ./PROCEDURES/update_coord_model_run_id.prc
-start ./PROCEDURES/delete_coord_model_run_id.prc
-start ./PROCEDURES/insert_coord_model_run_keyval.prc
-start ./PROCEDURES/update_coord_model_run_keyval.prc
-start ./PROCEDURES/delete_coord_model_run_keyval.prc
-start ./PROCEDURES/get_just_created_model_run_id.prc
-start ./PROCEDURES/create_model_run_id.prc
-start ./PROCEDURES/update_model_run_id.prc
-start ./PROCEDURES/touch_model_run_id.prc
-start ./PROCEDURES/delete_model_run_id.prc
-start ./PROCEDURES/get_model_run_id.prc
-start ./PROCEDURES/update_coord_mri_archive_cmmnt.prc
-start ./PROCEDURES/update_coord_mri_kv_arch_cmmnt.prc
+start ./PROCEDURES/model_is_coord.prc;
+start ./PROCEDURES/get_next_model_run_id.prc;
+start ./PROCEDURES/insert_coord_model_run_id.prc;
+start ./PROCEDURES/update_coord_model_run_id.prc;
+start ./PROCEDURES/delete_coord_model_run_id.prc;
+start ./PROCEDURES/insert_coord_model_run_keyval.prc;
+start ./PROCEDURES/update_coord_model_run_keyval.prc;
+start ./PROCEDURES/delete_coord_model_run_keyval.prc;
+start ./PROCEDURES/get_just_created_model_run_id.prc;
+start ./PROCEDURES/create_model_run_id.prc;
+start ./PROCEDURES/update_model_run_id.prc;
+start ./PROCEDURES/touch_model_run_id.prc;
+start ./PROCEDURES/delete_model_run_id.prc;
+start ./PROCEDURES/get_model_run_id.prc;
+start ./PROCEDURES/update_coord_mri_archive_cmmnt.prc;
+start ./PROCEDURES/update_coord_mri_kv_arch_cmmnt.prc;
+start ./PROCEDURES/delete_from_hdb.prc;
+start ./PROCEDURES/write_to_hdb.prc;
+start ./PROCEDURES/cp_agg_sum.prc;
+start ./PROCEDURES/mavg_trigger.prc;
+start ./PROCEDURES/modify_site_coef.prc;
+start ./PROCEDURES/get_cgi.prc;
+
+spool off
+exit;
+

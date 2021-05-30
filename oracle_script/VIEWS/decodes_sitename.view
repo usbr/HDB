@@ -1,0 +1,64 @@
+/* now the view for the DECODES sitename table  */
+
+create or replace view site_to_decodes_name_view as
+  SELECT 
+-- THIS VIEW MODIFIED TWO PLACES BY M. BOGNER 04022013 FOR PROPER 
+-- CP AND OPENDCS OPERATIONS.  SEE COMMENTS BELOW
+    siteid,
+    nametype,
+    sitename,
+    dbnum,
+    agency_cd
+  FROM
+    (SELECT a.hdb_site_id "SITEID",
+      b.ext_site_code_sys_name "NAMETYPE",
+      a.primary_site_code "SITENAME",
+      SUBSTR(SUBSTR(secondary_site_code,1,instr(secondary_site_code,'|')-1),1,2) "DBNUM",
+      SUBSTR(secondary_site_code,instr(secondary_site_code,'|')         +1,5) "AGENCY_CD",
+      f.sortnumber sortnum
+    FROM hdb_ext_site_code a,
+      hdb_ext_site_code_sys b,
+      hdb_site c,
+      ref_db_list d,
+      decodes.enum e,
+      decodes.enumvalue f
+    WHERE a.ext_site_code_sys_id  = b.ext_site_code_sys_id
+    AND a.hdb_site_id             = c.site_id
+    AND c.db_site_code            = d.db_site_code
+    AND d.session_no              = 1
+    AND e.name                    = 'SiteNameType'
+    AND e.id                      = f.enumid
+    AND f.enumvalue               = b.ext_site_code_sys_name
+    AND b.ext_site_code_sys_name <> 'hdb'
+    UNION
+    SELECT c.site_id,
+      f.enumvalue,
+---   TRANSLATE THE NAME TO GET RID OF PARENTHESIS AND PERIODS IN THE SITENAME
+--    SINCE THIS CAUSES ISSUES WITH THE CP AND OPENDCS
+--    TRANSLATE ADDED BY M. BOGNER 04022013
+      TO_CHAR(translate(c.site_name,'().','|| ')
+      || ': '
+      || c.site_id
+      || ': '
+      ||c.description),
+      NULL,
+      NULL,
+      f.sortnumber sortnum
+    FROM hdb_site c,
+      decodes.enum e,
+      decodes.enumvalue f,
+      ref_db_list d
+    WHERE e.name       = 'SiteNameType'
+    AND e.id           = f.enumid
+    AND f.enumvalue    = 'hdb'
+    AND c.db_site_code = d.db_site_code
+    AND d.session_no   = 1
+    ORDER BY sortnum
+    );
+
+
+grant select on site_to_decodes_name_view to public;
+grant insert,update,delete on site_to_decodes_name_view to decodes_role;
+create or replace public synonym sitename for site_to_decodes_name_view;
+
+

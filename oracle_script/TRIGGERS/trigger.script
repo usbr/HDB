@@ -1,25 +1,51 @@
+set echo on
+set feedback on
+spool hdb_triggers.out
+
 @ ./TRIGGERS/auth_sdi_chk_role.trg;
 @ ./TRIGGERS/auth_site_chk_role.trg;
-@ ./TRIGGERS/check_computed_datatype_id.trg;
+/* @ ./TRIGGERS/check_computed_datatype_id.trg;  removed  */
 @ ./TRIGGERS/check_attr_type_and_unit.trg;
 @ ./TRIGGERS/check_property_type_and_unit.trg;
 @ ./TRIGGERS/combined_disagg_chk_val.trg;
 @ ./TRIGGERS/combined_ref_div_chk.trg;
 @ ./TRIGGERS/combined_ref_res_chk.trg;
 @ ./TRIGGERS/combined_ref_str_chk.trg;
+@ ./TRIGGERS/cp_algorithm_triggers.trg;
+@ ./TRIGGERS/cp_algo_property_triggers.trg;
+@ ./TRIGGERS/cp_algo_ts_parm_triggers.trg;
+@ ./TRIGGERS/cp_computation_triggers.trg;
+@ ./TRIGGERS/cp_comp_property_triggers.trg;
+@ ./TRIGGERS/cp_comp_ts_parm_triggers.trg;
+@ ./TRIGGERS/cp_depends_notify_triggers.trg
+@ ./TRIGGERS/cp_ts_id_triggers.trg
 @ ./TRIGGERS/datatype_unit_check.trg;
+@ ./TRIGGERS/decodes_site.trg;
+@ ./TRIGGERS/decodes_sitename.trg;
+@ ./TRIGGERS/decodes_engineeringunit_do_nothing.trg;
+@ ./TRIGGERS/decodes_hdb_site.trg;
 @ ./TRIGGERS/hdb_site_site_perm.trg;
+@ ./TRIGGERS/hdb_datatype_triggers.trg;
 @ ./TRIGGERS/hdb_ext_site_code_triggers.trg;
 @ ./TRIGGERS/hdb_ext_data_code_triggers.trg;
 @ ./TRIGGERS/hdb_ext_data_source_triggers.trg;
 @ ./TRIGGERS/hdb_feature_property_trigs.trg;
 @ ./TRIGGERS/hdbid_chk_val_site_ot_id.trg;
 @ ./TRIGGERS/hm_hourly_daily_valid.trg;
-@ ./TRIGGERS/ref_derivation_destination_triggers.trg;
-@ ./TRIGGERS/ref_derivation_source_triggers.trg;
+-- @ ./TRIGGERS/ref_derivation_destination_triggers.trg;  removed for CP project	
+-- @ ./TRIGGERS/ref_derivation_source_triggers.trg;  removed for CP project	
+@ ./TRIGGERS/m_hour_triggers.trg;
+@ ./TRIGGERS/m_day_triggers.trg;
+@ ./TRIGGERS/m_month_triggers.trg;
+@ ./TRIGGERS/m_year_triggers.trg;
+@ ./TRIGGERS/m_wy_triggers.trg;
+@ ./TRIGGERS/ref_db_generic_list_triggers.trg;
 @ ./TRIGGERS/ref_ext_site_data_map_triggers.trg;
 @ ./TRIGGERS/ref_ext_site_data_map_keyval_triggers.trg;
 @ ./TRIGGERS/ref_interval_redefinition_triggers.trg;
+@ ./TRIGGERS/ref_interval_copy_limits_triggers.trg;
+@ ./TRIGGERS/ref_rating_triggers.trg;
+@ ./TRIGGERS/ref_site_rating_triggers.trg;
 @ ./TRIGGERS/ref_res_flowlu_site_perm.trg;
 @ ./TRIGGERS/ref_res_wselu_site_perm.trg;
 @ ./TRIGGERS/ref_site_attr_trigs.trg;
@@ -48,3 +74,40 @@
 @ ./TRIGGERS/ref_db_list_triggers.trg;
 @ ./TRIGGERS/ref_model_run_archive_triggers.trg;
 @ ./TRIGGERS/ref_model_run_keyval_archive_triggers.trg;
+@ ./TRIGGERS/tsdb_group_member_dt_triggers.trg
+@ ./TRIGGERS/tsdb_group_member_group_triggers.trg
+@ ./TRIGGERS/tsdb_group_member_other_triggers.trg
+@ ./TRIGGERS/tsdb_group_member_site_triggers.trg
+@ ./TRIGGERS/tsdb_group_member_ts_triggers.trg
+@ ./TRIGGERS/tsdb_group_triggers.trg
+@ ./TRIGGERS/ref_ensemble_keyval_triggers.trg
+@ ./TRIGGERS/ref_ensemble_trace_triggers.trg
+@ ./TRIGGERS/ref_ensemble_triggers.trg
+@ ./TRIGGERS/HDB_AGEN_PK_TRIG.trg
+@ ./TRIGGERS/HDB_ATTR_PK_TRIG.trg
+@ ./TRIGGERS/HDB_COLLECTION_SYSTEM_PK_TRIG.trg
+@ ./TRIGGERS/HDB_DAMTYPE_PK_TRIG.trg
+@ ./TRIGGERS/HDB_DATA_SOURCE_PK_TRIG.trg
+@ ./TRIGGERS/HDB_EXT_DATA_CODE_SYS_PK_TRIG.trg
+@ ./TRIGGERS/HDB_EXT_DATA_SOURCE_PK_TRIG.trg
+@ ./TRIGGERS/HDB_EXT_SITE_CODE_SYS_PK_TRIG.trg
+@ ./TRIGGERS/HDB_FEATURE_CLASS_PK_TRIG.trg
+@ ./TRIGGERS/HDB_FEATURE_PK_TRIG.trg
+@ ./TRIGGERS/HDB_GAGETYPE_PK_TRIG.trg
+@ ./TRIGGERS/HDB_LOADING_APPLICATIO_PK_TRIG.trg
+@ ./TRIGGERS/HDB_METHOD_CLASS_PK_TRIG.trg
+@ ./TRIGGERS/HDB_METHOD_PK_TRIG.trg
+@ ./TRIGGERS/HDB_MODEL_PK_TRIG.trg
+@ ./TRIGGERS/HDB_OBJECTTYPE_PK_TRIG.trg
+@ ./TRIGGERS/HDB_PROPERTY_PK_TRIG.trg
+@ ./TRIGGERS/HDB_RIVER_PK_TRIG.trg
+@ ./TRIGGERS/HDB_SITE_DATATYPE_PK_TRIG.trg
+@ ./TRIGGERS/HDB_STATE_PK_TRIG.trg
+@ ./TRIGGERS/HDB_USBR_OFF_PK_TRIG.trg
+@ ./TRIGGERS/REF_EXT_SITE_DATA_MAP_PK_TRIG.trg
+@ ./TRIGGERS/REF_RATING_DT_LOAD.trg
+@ ./TRIGGERS/REF_DB_LIST_PK_TRIG.trg
+@ ./TRIGGERS/REF_AGG_DISAGG_PK_TRIG.trg
+@ ./TRIGGERS/REF_SPATIAL_RELATION_SITE_PERM.trg
+spool off
+exit;

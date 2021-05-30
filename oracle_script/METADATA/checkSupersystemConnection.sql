@@ -16,5 +16,5 @@ CREATE OR REPLACE FUNCTION check_supersystem_connection (select_string IN VARCHA
 /
 
 grant execute on check_supersystem_connection to public;
-drop public synonym check_supersystem_connection;
+--drop public synonym check_supersystem_connection;
 create public synonym check_supersystem_connection for check_supersystem_connection;

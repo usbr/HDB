@@ -23,6 +23,5 @@ BEGIN
 END;
 /
 show errors;
-/
 grant execute on check_valid_attr_value to public;
 create public synonym check_valid_attr_value for check_valid_attr_value;

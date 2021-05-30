@@ -1,0 +1,49 @@
+create or replace view cp_active_sdi_tsparm_view
+as
+/* this view written by M. Bogner CADSWES APRIL 2006
+   the purpose of this view is to select all site_datatype_ids and the respective
+   loading application_id for all active definitions for the sdi's that are defined as
+   input parameters for some defined calculation                                        
+   modified by M. Bogner Jan 2008 to get a few more columns from the same tables
+*/
+/* Modified by M. Bogner May 2012 to change the view to look at the new CP_TS_ID and
+   the CP_COMP_DEPENDS Table. I decided changing the view was  more effective than to 
+   change every time series table trigger. The effective dates were made to be a very wide
+   range since the effective check will now be performed within the CP code
+                                                                                        */
+select distinct ccts.site_datatype_id, ccts.interval, ccts.table_selector, cc.loading_application_id, 
+       to_date(1,'J') "EFFECTIVE_START_DATE_TIME",
+       sysdate+365000 "EFFECTIVE_END_DATE_TIME",
+       ccts.ts_id,
+       ccts.model_id, ca.algorithm_id,ca.algorithm_name, cc.computation_id, cc.computation_name
+from  cp_computation cc, cp_ts_id ccts, cp_algorithm ca, cp_comp_depends ccd
+where 
+       cc.enabled = 'Y' 
+  and  cc.loading_application_id is not null
+  and  cc.computation_id = ccd.computation_id
+  and  cc.algorithm_id = ca.algorithm_id
+  and  ccd.ts_id = ccts.ts_id;
+
+/* might as well give a public select for this view  */
+create or replace public synonym cp_active_sdi_tsparm_view for cp_active_sdi_tsparm_view;
+grant select on cp_active_sdi_tsparm_view to public;
+
+/*
+This was the old way of doing the view before phase 3.0 which is the application of groups to
+the Computation processor.  It was a programming decision to change the view instead of all the triggers
+  
+select ccts.site_datatype_id, ccts.interval, ccts.table_selector, cc.loading_application_id, 
+       nvl(cc.effective_start_date_time,to_date(1,'J')) "EFFECTIVE_START_DATE_TIME",
+       nvl(cc.effective_end_date_time,sysdate+365000) "EFFECTIVE_END_DATE_TIME",
+       ccts.model_id, ca.algorithm_id,ca.algorithm_name, cc.computation_id, cc.computation_name
+from  cp_computation cc, cp_comp_ts_parm ccts, cp_algorithm ca, cp_algo_ts_parm catp
+where 
+       cc.enabled = 'Y' 
+  and  cc.loading_application_id is not null
+  and  cc.computation_id = ccts.computation_id
+  and  cc.algorithm_id = ca.algorithm_id
+  and  ca.algorithm_id = catp.algorithm_id
+  and  ccts.algo_role_name = catp.algo_role_name
+  and  catp.parm_type like 'i%';
+
+*/

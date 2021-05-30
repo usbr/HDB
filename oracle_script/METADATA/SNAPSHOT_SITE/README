@@ -1,9 +1,3 @@
-9/6/06
-NOTE: precreate_snapshot_inst.sh is no longer needed. Meta data user
-is created as part of every HDB installation due to Czar maintenance
-of some HDB_ tables.
-
-
 This file documents the scripts in this directory:
 
 
@@ -30,6 +24,10 @@ metaDataUser.ddl: Creates the user meta_data_user.
 
 new_hdb_fk.sql: Creates foreign keys which point to snapshots. Creates
 new_hdb_fk_script.sql. MUST RUN USING @, not <
+
+precreate_snapshot_inst.sh: Script which must be run on snapshot installation
+before creating master installation. (Remainder of snapshot installation must
+be created after the master is in place.)
 
 ref_refresh_monitor.sql: Creates the table ref_refresh_monitor.
 

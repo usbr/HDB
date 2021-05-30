@@ -1,0 +1,20 @@
+/* now the view for the decodes site table  */
+/* create the sites view for the decode site table  */
+/* this view modified 12/13/06 by M.Bogner  to eliminate record redundancies  */
+
+create or replace view SITE_TO_DECODES_SITE_VIEW as
+select a.site_id "ID", a.lat "LATITUDE", a.longi "LONGITUDE",
+b.nearestcity,b.state,b.region, b.timezone,b.country,a.elevation,b.elevunitabbr,
+substr(a.site_name||chr(10)||a.description,1,801) "DESCRIPTION"
+from hdb_site a, decodes_site_ext b, ref_db_list d
+where a.site_id = b.site_id(+)
+and d.db_site_code = a.db_site_code
+and d.session_no = 1;
+
+
+grant select on site_to_decodes_site_view to public;
+grant insert,update,delete on site_to_decodes_site_view to decodes_role;
+create or replace public synonym site for site_to_decodes_site_view;
+
+
+

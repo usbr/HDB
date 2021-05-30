@@ -1,0 +1,32 @@
+create or replace FUNCTION IS_ROLE_GRANTED 
+(
+  ROLE_NAME IN VARCHAR2 
+) RETURN BOOLEAN AS 
+/*
+   Replacement for the now-broken behavior of DBMS_SESSION.Is_Role_Enabled
+   Per Oracle 12cR2 docs: "All roles are disabled in any named PL/SQL block that executes with definer's rights."
+https://docs.oracle.com/en/database/oracle/oracle-database/12.2/dbseg/configuring-privilege-and-role-authorization.html#GUID-5C57B842-AF82-4462-88E9-5E9E8FD59874
+   We can only check that the current user is granted the specified role as default, we cannot check if they have the role
+   actually enabled!
+
+    Written February 24, 2018 by Andrew Gilmore
+*/
+    is_valid_role   NUMBER;
+BEGIN
+    BEGIN
+    SELECT
+        COUNT(*)
+    INTO        is_valid_role
+    FROM        user_role_privs
+    WHERE       default_role = 'YES'
+        AND   granted_role IN (ROLE_NAME);
+   return is_valid_role>0;
+   EXCEPTION WHEN OTHERS THEN RETURN FALSE;  
+   END;
+END IS_ROLE_GRANTED;
+/
+show errors
+
+GRANT EXECUTE ON IS_ROLE_GRANTED TO PUBLIC;
+CREATE OR REPLACE PUBLIC SYNONYM IS_ROLE_GRANTED FOR IS_ROLE_GRANTED;
+

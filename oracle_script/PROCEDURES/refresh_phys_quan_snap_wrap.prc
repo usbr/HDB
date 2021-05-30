@@ -23,6 +23,6 @@ show errors
 /
 
 grant execute on refresh_phys_quan_snap_wrap to czar_role;
-drop public synonym refresh_phys_quan_snap_wrap;
+--drop public synonym refresh_phys_quan_snap_wrap;
 create public synonym refresh_phys_quan_snap_wrap for refresh_phys_quan_snap_wrap;
 

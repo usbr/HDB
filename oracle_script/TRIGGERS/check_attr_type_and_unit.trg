@@ -10,5 +10,5 @@ begin
 end;
 /
 show errors trigger check_attr_type_and_unit;
-/
+
 

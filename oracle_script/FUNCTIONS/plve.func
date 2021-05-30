@@ -1,0 +1,42 @@
+create or replace FUNCTION PLVE(
+	  P_SDI NUMBER,P_TABLE_SELECTOR VARCHAR2, P_LIMIT_VALUE FLOAT, P_EFF_DATE DATE, P_HOURS_BACK NUMBER) 
+	RETURN NUMBER is
+		return_value NUMBER;
+		l_statement  VARCHAR2(2000);
+		
+	BEGIN 
+	/* this PLVE (Prior Limit Value Exceedence) function returns the the number of rows in the table 
+	   that equals or exceeds the P_LIMIT_VALUE for an sdi value in the P_TABLE_SELECTOR table with 
+	   the highest limit of the truncated day or the P_EFF_DATE minus the P_BACK_HOURS
+	*/
+	
+	/*  this function written by M. Bogner  06/21/2013  */
+	
+		begin
+		return_value := NULL;
+        
+        /* build the query based on passed parameters  */
+		l_statement :=
+		' select count(*) from ' || p_table_selector  || ' where  ' ||
+		' site_datatype_id = ' || to_char(P_SDI) || ' and ' ||
+		' start_date_time >= ' || 
+        ' greatest(trunc(to_date(''' || to_char(P_EFF_DATE,'dd-MON-YYYY HH24:MI') || ''',''dd-MON-YYYY HH24:MI'')),' ||
+        ' to_date(''' || to_char(P_EFF_DATE,'dd-MON-YYYY HH24:MI') || ''',''dd-MON-YYYY HH24:MI'') - (' || to_char(P_HOURS_BACK) || '/24)) ' || 
+		' and start_date_time < ' ||
+		' to_date(''' || to_char(P_EFF_DATE,'dd-MON-YYYY HH24:MI') || ''',''dd-MON-YYYY HH24:MI'')' ||
+        ' and value > ' || to_char(P_LIMIT_VALUE);
+
+		/* now execute this dynamic sql select statement */
+    	execute immediate (l_statement) INTO return_value;
+		
+		exception when others then return_value := NULL;
+		end;
+		
+	   return (return_value);
+--	   return (rtrim(l_statement));
+	END;
+.
+/
+
+create or replace public synonym PLVE for PLVE;
+grant execute on PLVE to public;

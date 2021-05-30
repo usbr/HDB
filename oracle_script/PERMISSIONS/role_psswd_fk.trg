@@ -1,3 +1,5 @@
+set echo on
+
 create or replace trigger role_psswd_fk
 after             insert or update of role
 on                role_psswd
@@ -8,4 +10,5 @@ begin
 end;
 /
 show errors trigger unit_chk_val_spec;
-/
+
+exit;

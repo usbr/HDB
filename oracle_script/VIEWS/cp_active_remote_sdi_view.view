@@ -1,0 +1,20 @@
+create or replace view cp_active_remote_sdi_view
+("SITE_DATATYPE_ID","INTERVAL","TABLE_SELECTOR","TABLE_NAME","DB_LINK","EFFECTIVE_START_DATE_TIME",
+ "EFFECTIVE_END_DATE_TIME")
+as
+/* this view written by M. Bogner SUTRON 2010
+   the purpose of this view is to select all site_datatype_ids and the respective
+   row data for all active definitions for the sdi's that are defined as
+   input parameters for remotely defined calculations                                        
+*/
+select distinct crt.site_datatype_id, crt.interval, crt.table_selector, 
+	upper(crt.table_selector|| crt.interval),crt.db_link,
+	nvl(crt.effective_start_date_time,to_date(1,'J')),
+	nvl(crt.effective_end_date_time,sysdate+365000)
+from  cp_remote_triggering crt, ref_db_parameter dbp, global_name gn
+where 
+       crt.active_flag = 'Y' 
+  and  dbp.active_flag = 'Y'
+  and  dbp.param_name = 'REMOTE COMPUTATIONS'
+  and  dbp.global_name = gn.global_name;
+  

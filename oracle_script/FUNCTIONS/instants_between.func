@@ -1,0 +1,75 @@
+
+CREATE OR REPLACE FUNCTION instants_between(start_date_time IN DATE,
+                                            end_date_time IN DATE,
+                                            minutes IN INTEGER DEFAULT 1440)
+RETURN date_array
+PIPELINED
+IS
+/* Function to return dates for instantaneous data, or any regular interval
+   start_date_time required date to begin returning dates
+   end_date_time   required ending date
+   minutes         optional minutes between dates returned, defaults to one day
+   
+   Use this instead of dates_between for instantaneous data, because one needs to
+   specify the expected interval between instantaneous data. It could be
+   hourly, 30 minutes, 15 minutes, 10, 5 or even 5 seconds.
+   */
+
+/* Function to help display data for HDB Poet and other tools:
+   instants_between: given two dates and a number of minutes, return list of
+   all dates that many minutes apart between the two dates.
+
+  Example query:
+  
+  select date_time, value, 
+  colorize_value(value, overwrite_flag, validation,method_id,
+  derivation_flags) as Color
+  from r_day, table(dates_between(TO_Date('05/14/2008', 'MM/dd/yyyy'),
+                                  TO_Date('05/19/2008', 'MM/dd/yyyy'),
+                                  'day')) dates
+  where
+  start_date_time(+) = dates.date_time and
+  site_datatype_id(+) = 1923
+  order by dates.date_time;
+  
+  Output:
+  
+  DATE_TIME	VALUE	COLOR
+14-MAY-08 00:00	7467.78	SkyBlue
+15-MAY-08 00:00	null	LightGray
+16-MAY-08 00:00	7400.09	MistyRose
+17-MAY-08 00:00	7469.35	PaleGreen
+18-MAY-08 00:00	7470.09	Yellow
+19-MAY-08 00:00	null	LightGray
+
+Red is not in this list because it only applies to failed validations,
+which are only in r_base.
+
+   */
+
+intervalsperday NUMBER := 1440 / minutes;
+dates date_object := date_object(NULL);
+BEGIN
+  IF end_date_time < start_date_time THEN
+    deny_action('End date must be after start date!');
+  END IF;
+
+-- below the line was modified to return 1 less value due to count starting at zero math error
+-- modified by M. Bogner  May 9 2012
+  FOR i IN 0 .. (end_date_time -start_date_time) *(intervalsperday) - 1
+
+  LOOP
+    dates.date_time := start_date_time + i / intervalsperday;
+    pipe ROW(dates);
+  END LOOP;
+
+  RETURN;
+END instants_between;
+.
+/
+
+show errors
+GRANT EXECUTE ON instants_between TO PUBLIC;
+CREATE OR REPLACE PUBLIC SYNONYM instants_between FOR instants_between;
+
+

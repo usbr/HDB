@@ -1,0 +1,12 @@
+-- this view is a replacement for the hdb_computed_dataype table that
+-- was replaced with the cp_computation table once the computation processor went live in 2008
+
+create or replace view hdb_computed_datatype as
+select computation_id,computation_name,
+to_number(null) "DATATYPE_ID",cmmnt
+ from cp_computation where computation_id < 100;
+
+create or replace public synonym hdb_computed_datatype for hdb_computed_datatype;
+grant select on hdb_computed_datatype to public;
+
+

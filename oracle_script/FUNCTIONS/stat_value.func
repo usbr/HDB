@@ -1,0 +1,71 @@
+create or replace FUNCTION STAT_VALUE(
+	  SDI NUMBER,INTERVAL VARCHAR2, EFF_DATE DATE) 
+	RETURN FLOAT IS
+		return_value FLOAT;
+		s_statement varchar2(2000);
+		interval_num varchar2(100);
+	BEGIN 
+	/* this function returns the stat value in the r_ stat tables 
+	with the input site_datatype_id interval, and effective date
+	*/
+	
+	/*  this function written by M. Bogner  03/09/2009  */
+	/*  this function modified by M. Bogner  10/05/2009  to correct the indexing 
+	    for the day and month   stat tables            */
+	/*  this function modified by M. Bogner  11/29/2009  to account for non leap year  
+	    since the indexing always has a feb-29 day in the table */ 
+	    
+   CASE  LOWER(interval)
+     WHEN 'instant' THEN 
+       interval_num := '0';
+     WHEN 'hour' THEN 
+       interval_num := ltrim(to_char(EFF_DATE,'HH24'),'0');
+     WHEN 'day' THEN
+     /* day is referenced from 01-OCT of the water year  */ 
+       SELECT TRUNC(EFF_DATE) - TO_DATE( CASE WHEN TO_NUMBER( TO_CHAR( EFF_DATE,'MM') ) IN ( 10, 11, 12 )
+                THEN '1-Oct-' || TO_CHAR(EFF_DATE,'YYYY') 
+                ELSE '1-Oct-' || TO_CHAR( TO_NUMBER( TO_CHAR(EFF_DATE,'YYYY') ) - 1 )
+                END )  + 1 into interval_num from dual;
+     /* since the indexing always includes a day for leap year, you have to add one to the indexing
+        for non leap years                                                                          */  
+        IF ((TO_NUMBER( TO_CHAR( EFF_DATE,'MM') ) between 3 and 9 ) AND 
+            (TO_CHAR(LAST_DAY(TO_DATE('01-FEB-'||TO_CHAR(EFF_DATE,'YYYY'))),'dd') = '28')) THEN
+          interval_num := interval_num + 1;
+        END IF;  
+     WHEN 'month' THEN 
+     /* month is referenced from October of the current water year  */
+       SELECT CASE WHEN TO_NUMBER( TO_CHAR( EFF_DATE,'MM') ) IN ( 10, 11, 12 )
+                THEN TO_NUMBER( TO_CHAR( EFF_DATE,'MM') ) - 9
+                ELSE TO_NUMBER( TO_CHAR( EFF_DATE,'MM') ) + 3
+                END  into interval_num from dual;
+
+     WHEN 'year' THEN 
+     /* year should be based on just year, otherwise no difference compared to WY */
+       interval_num := ltrim(to_char(EFF_DATE,'YYYY'),'0');
+     WHEN 'wy' THEN 
+       /* water year should be based on Water year */
+       /* interval_num := ltrim(to_char(EFF_DATE,'YYYY'),'0');  */
+         SELECT CASE WHEN TO_NUMBER( TO_CHAR( EFF_DATE,'MM') ) IN ( 10, 11, 12 )
+			THEN TO_NUMBER( TO_CHAR( EFF_DATE,'YYYY') ) + 1
+			ELSE TO_NUMBER( TO_CHAR( EFF_DATE,'YYYY') )
+         END  into interval_num from dual;
+    END CASE;	
+		begin
+		return_value := NULL;
+		s_statement :=
+		' select value from R_' || interval || 'STAT where  ' ||
+		' site_datatype_id = ' || to_char(sdi) || ' and ' ||
+		interval || ' = ' || to_char(interval_num) ;
+		
+		/* now execute this dynamic sql select statement */
+		execute immediate (s_statement) INTO return_value;		
+		exception when others then return_value := NULL;
+		end;
+		
+	   return (return_value);
+	END;
+.
+/
+--
+create public synonym STAT_VALUE for STAT_VALUE;
+grant execute on STAT_VALUE to public;

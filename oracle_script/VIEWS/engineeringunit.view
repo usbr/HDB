@@ -1,0 +1,15 @@
+
+/* The view against HDB_UNIT table is still needed to interface correctly with DECODES   */
+/* now  create the view to make it look like a decodes table for the engineering unit table  */
+/* and give the right permissions to this view  */
+create or replace view unit_to_decodes_unit_view as
+select a.unit_common_name "UNITABBR", a.unit_name "NAME",
+a.family, b.dimension_name "MEASURES"
+from hdb_unit a, hdb_dimension b
+where a.dimension_id = b.dimension_id;
+
+grant select on unit_to_decodes_unit_view to public;
+grant insert,update,delete on unit_to_decodes_unit_view to decodes_role;
+create or replace public synonym engineeringunit for unit_to_decodes_unit_view;
+
+

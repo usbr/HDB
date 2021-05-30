@@ -1,2 +1,2 @@
 start ./PROCEDURES/refresh_phys_quan_snap_wrap.prc;
-start ../METADATA/checkSupersystemConnection.sql;
+start ./METADATA/checkSupersystemConnection.sql;

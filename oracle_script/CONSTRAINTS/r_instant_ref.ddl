@@ -26,5 +26,5 @@ alter table    r_instant
 add
    constraint  r_instant_fk5
    foreign key (method_id)
-   references  hdb_method(method_id)
+   references  hdb_method(method_id);
 

@@ -8,14 +8,14 @@ echo Starting the creation script.
 # the shell script. The replacement is done with sed. The scripts are then input to
 # sqlplus. 
 # ------------------------------------------------------------------------------
-echo Have you set ORACLE_SID and HDB_LOCAL in your environment? 
+echo 'Have you set ORACLE_SID and HDB_LOCAL in your environment?  (y/n)'
 read answer 
 
 if test $answer != y
     then exit
 fi
 
-echo Have you set parameters properly in timeSeries.ddl
+echo 'Have you set parameters properly in timeSeries.ddl (y/n)'
 read answer
 
 if test $answer != y
@@ -42,8 +42,14 @@ fi
 
 # Prompting for information
 
+echo Enter ORACLE SYS password:
+read syspasswd
+
+# converts the username to uppercase - ACL requirement
+typeset -u dba_name
 echo Enter DBA user name:
 read dba_name
+
 echo Enter DBA user password:
 read passwd
 
@@ -94,6 +100,13 @@ sed 's/DBA/'$dba_name'/g' ./SCHEMA/userpriv.ddl > temp
 mv temp ./SCHEMA/userpriv.ddl
 sed 's/DBA/'$dba_name'/g' ./SCHEMA/userprivsys.ddl > temp
 mv temp ./SCHEMA/userprivsys.ddl
+sed 's/DBA/'$dba_name'/g' ./SCHEMA/set_decodes_privs.sql > temp
+mv temp ./SCHEMA/set_decodes_privs.sql
+
+
+# Added for others31 release
+sed 's/DBA/'$dba_name'/g' ./FUNCTIONS/acl_mail.func > temp
+mv temp ./FUNCTIONS/acl_mail.func
 
 # Make substitutions in czar files
 if test $is_slave != y 
@@ -123,81 +136,158 @@ chmod +x ./PERMISSIONS/permissions.sh
 
 # Inputting .ddl files into sqlplus
 
-sqlplus '$dba_name/$passwd as sysdba'    < ./SCHEMA/user.ddl        > out1
-grep ERROR out1
-sqlplus '$dba_name/$passwd as sysdba'    < ./SCHEMA/set_dba_roles.ddl > out1.01
+echo "Accessing as SYS user for role.ddl"
+sqlplus "sys/$syspasswd as sysdba" @./SCHEMA/role.ddl
+grep ERROR hdb_roles.out
+
+echo "Accessing as SYS user for user.ddl"
+sqlplus "sys/$syspasswd as sysdba"  @./SCHEMA/user.ddl
+grep ERROR hdb_users.out
+
+echo "Accessing as SYS user for set_dba_roles.ddl"
+sqlplus "sys/$syspasswd as sysdba"  < ./SCHEMA/set_dba_roles.ddl > out1.01
 grep ERROR out1.01
 
 if test $is_slave != y 
 then
-  sqlplus '$dba_name/$passwd as sysdba'    < ./SCHEMA/czar_users.ddl > out1.02
+  echo "Accessing as SYS user for czar_users.ddl"
+  sqlplus "sys/$syspasswd as sysdba"    < ./SCHEMA/czar_users.ddl > out1.02
   grep ERROR out1.02
 fi
 
-sqlplus $dba_name/$passwd  < ./SCHEMA/tbl.ddl         > out2
-grep ERROR out2
+echo "Accessing as $dba_name user for tbl.ddl"
+sqlplus $dba_name/$passwd  @./SCHEMA/tbl.ddl
+grep ERROR hdb_tables.out
+
+echo "Accessing as $dba_name user for timeSeries.ddl"
+sqlplus $dba_name/$passwd  @./SCHEMA/timeSeries.ddl
+grep ERROR hdb_timeseries.out
 
 # Create czar,island tables, or slave snapshots
 if test $is_slave != y 
 then
+  echo "Accessing as $dba_name user for czar_tbl.ddl"
   sqlplus $dba_name/$passwd  < ./SCHEMA/czar_tbl.ddl > out2.01
   grep ERROR out2.01
 else
+  echo "Accessing as $dba_name user for slave_snapshot.ddl"
   sqlplus $dba_name/$passwd    < ./SCHEMA/slave_snapshot.ddl > out2.02
   grep ERROR out2.02
 fi
 
-sqlplus $dba_name/$passwd  < ./SCHEMA/timeSeries.ddl  > out3
-grep ERROR out3
+echo "Accessing as $dba_name user for index.ddl"
+sqlplus $dba_name/$passwd  @./SCHEMA/index.ddl
+grep ERROR hdb_indexes.out
+
+echo "Accessing as $dba_name user for primkey.ddl"
+sqlplus $dba_name/$passwd  @./SCHEMA/primkey.ddl
+grep ERROR hdb_primkeys.out
+
+echo "Accessing as $dba_name user for type.script"
+sqlplus $dba_name/$passwd  @./TYPES/type.script
+grep ERROR hdb_types.out
+
+
+# create the HDB Computation Processor tables in HDB schema
+
+echo "Accessing as $dba_name user for createCompMetaData-oracle.sql"
+sqlplus $dba_name/$passwd @./SCHEMA/createCompMetaData-oracle.sql 
+grep ERROR hdb_cp_objects.out
+
+echo "Accessing as $dba_name user for userprivsys.ddl"
 sqlplus $dba_name/$passwd  < ./SCHEMA/userprivsys.ddl > out4
 grep ERROR out4
-sqlplus $dba_name/$passwd  < ./SCHEMA/syn.ddl         > out5
-grep ERROR out5
+
+echo "Accessing as $dba_name user for syn.ddl"
+sqlplus $dba_name/$passwd  @./SCHEMA/syn.ddl
+grep ERROR hdb_syns.out
+
+echo "Accessing as $dba_name user for view.script"
+sqlplus $dba_name/$passwd  @./VIEWS/view.script
+grep ERROR hdb_views.out
+
+echo "Accessing as $dba_name user for procedure.script"
+sqlplus $dba_name/$passwd  @./PROCEDURES/procedure.script
+grep ERROR hdb_procedures.out
+
+echo "Accessing as $dba_name user for function.script"
+sqlplus $dba_name/$passwd  @./FUNCTIONS/function.script
+grep ERROR hdb_functions.out
+
+echo "Accessing as $dba_name user for package.script"
+sqlplus $dba_name/$passwd  @./PACKAGES/package.script
+grep ERROR hdb_packages.out
+grep -i 'compilation error' hdb_packages.out
+
+echo "Accessing as $dba_name user for sequence.script"
+sqlplus $dba_name/$passwd  @./SEQUENCES/sequence.script
+grep ERROR hdb_sequences.out
+
+echo "Accessing as $dba_name user for view.script for second pass"
+sqlplus $dba_name/$passwd  @./VIEWS/view.script
+grep ERROR hdb_views.out
+
+
+# create the decodes schema
+
+echo "Accessing as $dba_name user for createORACLEDecodes.sql"
+sqlplus decodes/decodes  @./SCHEMA/createORACLEDecodes.sql 
+grep ERROR decodes_schema.out
+
+echo "Accessing as $dba_name user for createORACLEDecodesSequences.sql"
+sqlplus decodes/decodes  @./SEQUENCES/createORACLEDecodesSequences.sql
+grep ERROR decodes_sequences.out
+
+echo "Accessing as $dba_name user for set_decodes_privs.sql"
+sqlplus decodes/decodes  @./SCHEMA/set_decodes_privs.sql
+grep ERROR set_decodes_privs.out
+
+
 
 # Create czar syns
 if test $is_slave != y 
 then
+  echo "Accessing as $dba_name user for czar_syn.ddl"
   sqlplus $dba_name/$passwd   < ./SCHEMA/czar_syn.ddl > out5.01
   grep ERROR out5.01
 fi
 
-sqlplus $dba_name/$passwd  < ./SCHEMA/role.ddl        > out6
-grep ERROR out6
 
 if test $is_slave != y 
 then
+  echo "Accessing as $dba_name user for czar_role.ddl"
   sqlplus $dba_name/$passwd  < ./SCHEMA/czar_role.ddl        > out6.01
   grep ERROR out6.01
 fi
 
-sqlplus $dba_name/$passwd  < ./SCHEMA/rolepriv.ddl    > out7
-grep ERROR out7
+echo "Accessing as $dba_name user for rolepriv.ddl"
+sqlplus $dba_name/$passwd  @./SCHEMA/rolepriv.ddl
+grep ERROR hdb_rolepriv.out
 
 if test $is_slave != y 
 then
+  echo "Accessing as $dba_name user for czar_rolepriv.ddl"
   sqlplus $dba_name/$passwd  < ./SCHEMA/czar_rolepriv.ddl    > out7.01
   grep ERROR out7.01
 
+  echo "Accessing as $dba_name user for czar_md_userpriv.ddl"
   sqlplus $dba_name/$passwd  < ./SCHEMA/czar_md_userpriv.ddl    > out7.02
   grep ERROR out7.02
 fi
-
-sqlplus $dba_name/$passwd  < ./SCHEMA/index.ddl       > out8
-grep ERROR out8
-sqlplus $dba_name/$passwd  < ./SCHEMA/primkey.ddl     > out9
-grep ERROR out9
-
 if test $is_slave != y 
 then
+  echo "Accessing as $dba_name user for czar_primkey.ddl"
   sqlplus $dba_name/$passwd  < ./SCHEMA/czar_primkey.ddl    > out9.01
   grep ERROR out9.01
 fi
 
-sqlplus $dba_name/$passwd  < ./CONSTRAINTS/constraints.script > out10
-grep ERROR out10
+echo "Accessing as $dba_name user for constraint.script"
+sqlplus $dba_name/$passwd  @./CONSTRAINTS/constraint.script
+grep ERROR hdb_constraints.out
 
 if test $is_slave != y 
 then
+echo "Accessing as $dba_name user for czar_constraints.script"
   sqlplus $dba_name/$passwd  < ./CONSTRAINTS/czar_constraints.script    > out10.01
   grep ERROR out10.01
 fi
@@ -207,32 +297,38 @@ fi
 sh ./PERMISSIONS/permissions.sh 
 
 # Continuing to input .ddl files into sqlplus.
-
-sqlplus $dba_name/$passwd  < ./PACKAGES/package.script > out12
-grep ERROR out12
-sqlplus $dba_name/$passwd  < ./PROCEDURES/procedure.script > out13
-grep ERROR out13
-
 if test $is_slave != y 
 then
+echo "Accessing as $dba_name user for czar_procedure.script"
   sqlplus $dba_name/$passwd  < ./PROCEDURES/czar_procedure.script    > out13.01
   grep ERROR out13.01
 fi
 
-sqlplus $dba_name/$passwd  < ./TRIGGERS/trigger.script > out14
-grep ERROR out14
+# Adding script that will set up some CZAR/island procedures and Triggers
+if test $is_slave != y 
+then
+echo "Accessing as $dba_name user for czar and  island installation script"
+   ./METADATA/MASTER_SITE/ISLAND_SITE/create_island_inst.sh $dba_name $passwd
+fi
+
+echo "Accessing as $dba_name user for trigger.script"
+sqlplus $dba_name/$passwd  @./TRIGGERS/trigger.script 
+grep ERROR hdb_triggers.out
 
 if test $is_slave != y 
 then
+  echo "Accessing as $dba_name user for czar_trigger.script"
   sqlplus $dba_name/$passwd  < ./TRIGGERS/czar_trigger.script    > out14.01
   grep ERROR out14.01
 fi
 
-sqlplus $dba_name/$passwd  < ./SCHEMA/userpriv.ddl > out15
-grep ERROR out15
+echo "Accessing as $dba_name user for userpriv.ddl"
+sqlplus $dba_name/$passwd  @./SCHEMA/userpriv.ddl
+grep ERROR hdb_userprivs.out
 
 if test $is_slave != y 
 then
+  echo "Accessing as $dba_name user for czar_userpriv.ddl"
   sqlplus $dba_name/$passwd  < ./SCHEMA/czar_userpriv.ddl > out15.01
   grep ERROR out15.01
 fi
@@ -246,6 +342,7 @@ then
   echo db_site_code as you do for ref_db_list. Set is_czar_db to Y.
   echo
 else
+  echo "Accessing as $dba_name user for meta_data_user_grant.sql"
   sqlplus $dba_name/$passwd  < ./ADD_SLAVE/meta_data_user_grant.sql > out16
   grep ERROR out16
   echo                 IMPORTANT
@@ -261,10 +358,32 @@ else
 fi
 
 echo                   IMPORTANT 
-echo Database has been created. Loading standard data.
+echo "Database has been created. Prepare to Load standard data.  ** Press Enter to continue..."
 echo
+read prompt
 
+echo "Accessing as $dba_name user for STANDARD_DATA/standard.sh"
 sh ./STANDARD_DATA/standard.sh $dba_name $passwd $is_slave
 
 echo Load of standard date complete.
-echo Don\'t forget to check output in the .log and .out files in STANDARD_DATA
+echo Don\'t forget to check output in the .log and .out files in STANDARD_DATA Directory
+
+echo "Updating the global name for the imported DB parameters with update_global_name.sql"
+sqlplus $dba_name/$passwd  @./SCHEMA/update_global_names.sql
+grep ERROR hdb_global_names_update.out
+
+echo "Accessing as $dba_name user for recompile_invalids.ddl"
+sqlplus $dba_name/$passwd  @./recompile_invalids.sql
+grep ERROR hdb_recompiles.out
+
+echo "Accessing as $dba_name user for additional_db_mods.sql"
+sqlplus $dba_name/$passwd  @./SCHEMA/additional_db_mods.sql
+grep ERROR additional_db_mods.out
+
+grep ORA- *out*
+grep Warning *out*
+grep 'compilation errors' *out*
+grep unable *out*
+
+echo "  "
+echo " THe database creation script has completed.  If ORACLE errors have occurred .. please review and correct"

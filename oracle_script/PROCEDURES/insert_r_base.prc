@@ -9,7 +9,9 @@ CREATE OR REPLACE PROCEDURE insert_r_base ( SITE_DATATYPE_ID NUMBER,
 			  COLLECTION_SYSTEM_ID NUMBER,
 			  LOADING_APPLICATION_ID NUMBER,
 			  METHOD_ID NUMBER,
-			  COMPUTATION_ID NUMBER ) IS
+			  COMPUTATION_ID NUMBER,
+			  DATA_FLAGS VARCHAR2,
+			  DATE_TIME DATE ) IS
 BEGIN
     INSERT INTO R_BASE ( SITE_DATATYPE_ID,
 			 INTERVAL,
@@ -23,7 +25,8 @@ BEGIN
 			 COLLECTION_SYSTEM_ID,
 			 LOADING_APPLICATION_ID,
 			 METHOD_ID,
-			 COMPUTATION_ID )
+			 COMPUTATION_ID,
+			 DATA_FLAGS )
     VALUES ( SITE_DATATYPE_ID,
 	     INTERVAL,
 	     START_DATE_TIME,
@@ -31,17 +34,18 @@ BEGIN
 	     VALUE,
 	     AGEN_ID,
 	     OVERWRITE_FLAG,
-	     SYSDATE,
+	     DATE_TIME,
 	     VALIDATION,
 	     COLLECTION_SYSTEM_ID,
 	     LOADING_APPLICATION_ID,
 	     METHOD_ID,
-	     COMPUTATION_ID );
+	     COMPUTATION_ID,
+	     DATA_FLAGS);
 END;
 /
 
 show errors;
 /
-create public synonym insert_r_base for insert_r_base;
+create or replace public synonym insert_r_base for insert_r_base;
 grant execute on insert_r_base to app_role;
 

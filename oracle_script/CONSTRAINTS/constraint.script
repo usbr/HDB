@@ -1,0 +1,96 @@
+set echo on
+set feeback on
+spool hdb_constraints.out
+
+start ./CONSTRAINTS/decodes_site_ext.ddl;
+start ./CONSTRAINTS/hdb_attr_ref.ddl;
+start ./CONSTRAINTS/hdb_attr_feature_ref.ddl
+/* start ./CONSTRAINTS/hdb_computed_datatype_component_ref.ddl; */
+/* start ./CONSTRAINTS/hdb_computed_datatype_ref.ddl;  */
+start ./CONSTRAINTS/hdb_datatype_ref.ddl;
+start ./CONSTRAINTS/hdb_datatype_feature_ref.ddl
+start ./CONSTRAINTS/hdb_dmi_unit_map_ref.ddl;
+start ./CONSTRAINTS/hdb_ext_site_code_sys_ref.ddl;
+start ./CONSTRAINTS/hdb_ext_data_code_sys_ref.ddl;
+start ./CONSTRAINTS/hdb_ext_site_code_ref.ddl;
+start ./CONSTRAINTS/hdb_ext_data_code_ref.ddl;
+start ./CONSTRAINTS/hdb_ext_data_source_ref.ddl;
+start ./CONSTRAINTS/hdb_feature_ref.ddl
+start ./CONSTRAINTS/hdb_feature_property_ref.ddl
+start ./CONSTRAINTS/hdb_interval_ref.ddl;
+start ./CONSTRAINTS/hdb_method_class_ref.ddl;
+start ./CONSTRAINTS/hdb_method_ref.ddl;
+start ./CONSTRAINTS/hdb_model_ref.ddl;
+start ./CONSTRAINTS/hdb_model_coord_ref.ddl;
+start ./CONSTRAINTS/hdb_physical_quantity_ref.ddl
+start ./CONSTRAINTS/hdb_property_ref.ddl
+start ./CONSTRAINTS/hdb_rating_type.ddl;
+start ./CONSTRAINTS/hdb_river_reach_ref.ddl;
+start ./CONSTRAINTS/hdb_site_datatype_ref.ddl;
+start ./CONSTRAINTS/hdb_site_ref.ddl;
+start ./CONSTRAINTS/hdb_unit_ref.ddl;
+start ./CONSTRAINTS/ref_agg_disagg_ref.ddl;
+start ./CONSTRAINTS/ref_app_data_source_ref.ddl
+start ./CONSTRAINTS/ref_auth_site_datatype_ref.ddl;
+start ./CONSTRAINTS/ref_auth_site_ref.ddl;
+-- start ./CONSTRAINTS/ref_derivation_destination_ref.ddl;  removed for CP Project
+-- start ./CONSTRAINTS/ref_derivation_source_ref.ddl;  removed for CP Project
+start ./CONSTRAINTS/ref_div_ref.ddl;
+start ./CONSTRAINTS/ref_dmi_data_map_ref.ddl;
+start ./CONSTRAINTS/ref_ensemble_ref.ddl;
+start ./CONSTRAINTS/ref_ensemble_keyval_ref.ddl;
+start ./CONSTRAINTS/ref_ensemble_trace_ref.ddl;
+start ./CONSTRAINTS/ref_ext_site_data_map_ref.ddl;
+start ./CONSTRAINTS/ref_ext_site_data_map_keyval_ref.ddl;
+start ./CONSTRAINTS/ref_hm_filetype_ref.ddl;
+start ./CONSTRAINTS/ref_hm_pcode_objecttype_ref.ddl;
+start ./CONSTRAINTS/ref_hm_pcode_ref.ddl;
+start ./CONSTRAINTS/ref_hm_site_datatype_ref.ddl;
+start ./CONSTRAINTS/ref_hm_site_hdbid_ref.ddl;
+start ./CONSTRAINTS/ref_hm_site_pcode_ref.ddl;
+start ./CONSTRAINTS/ref_interval_redefinition_ref.ddl;
+start ./CONSTRAINTS/ref_installation.ddl;
+start ./CONSTRAINTS/ref_loading_application_prop.ddl;
+start ./CONSTRAINTS/ref_model_run_ref.ddl;
+start ./CONSTRAINTS/ref_model_run_keyval_ref.ddl;
+start ./CONSTRAINTS/ref_rating.ddl;
+start ./CONSTRAINTS/ref_site_rating.ddl;
+start ./CONSTRAINTS/ref_res_flowlu_ref.ddl;
+start ./CONSTRAINTS/ref_res_ref.ddl;
+start ./CONSTRAINTS/ref_res_wselu_ref.ddl;
+start ./CONSTRAINTS/ref_site_attr_ref.ddl;
+start ./CONSTRAINTS/ref_site_coef_day_ref.ddl;
+start ./CONSTRAINTS/ref_site_coef_month_ref.ddl;
+start ./CONSTRAINTS/ref_site_coef_ref.ddl;
+start ./CONSTRAINTS/ref_site_coeflu_ref.ddl;
+start ./CONSTRAINTS/ref_str_ref.ddl;
+start ./CONSTRAINTS/ref_source_priority_ref.ddl;
+start ./CONSTRAINTS/ref_spatial_relation.ddl;
+start ./CONSTRAINTS/m_day_ref.ddl;
+start ./CONSTRAINTS/m_hour_ref.ddl;
+start ./CONSTRAINTS/m_month_ref.ddl;
+start ./CONSTRAINTS/m_monthrange_ref.ddl;
+start ./CONSTRAINTS/m_monthstat_ref.ddl;
+start ./CONSTRAINTS/m_wy_ref.ddl;
+start ./CONSTRAINTS/m_year_ref.ddl;
+start ./CONSTRAINTS/r_base_ref.ddl;
+/* start ./CONSTRAINTS/r_base_update_ref.ddl;  removed for CP Project   */
+start ./CONSTRAINTS/r_day_ref.ddl;
+start ./CONSTRAINTS/r_daystat_ref.ddl;
+start ./CONSTRAINTS/r_hour_ref.ddl;
+start ./CONSTRAINTS/r_hourstat_ref.ddl;
+start ./CONSTRAINTS/r_instant_ref.ddl;
+start ./CONSTRAINTS/r_month_ref.ddl;
+start ./CONSTRAINTS/r_monthstat_ref.ddl;
+start ./CONSTRAINTS/r_monthstatrange_ref.ddl;
+start ./CONSTRAINTS/r_other_ref.ddl;
+start ./CONSTRAINTS/r_wy_ref.ddl;
+start ./CONSTRAINTS/r_wystat_ref.ddl;
+start ./CONSTRAINTS/r_year_ref.ddl;
+start ./CONSTRAINTS/r_yearstat_ref.ddl;
+start ./CONSTRAINTS/ref_interval_copy_limits.ddl;
+/* start ./CONSTRAINTS/hdb_derivation_flag.ddl;  removed for CP Project */
+
+spool off
+exit;
+

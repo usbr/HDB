@@ -13,7 +13,7 @@ storage (initial 50k
 
 create table ref_phys_quan_refresh_monitor (
 db_site_db_name            varchar2(25),
-message                    varchar2(200),
+message                    varchar2(1000),
 success_code               number(1)
 )                                                      
 pctfree 10

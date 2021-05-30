@@ -1,0 +1,29 @@
+create or replace package PRE_PROCESSOR as
+/*  PACKAGE PRE_PROCESSOR is the package designed to contain all
+    the procedures and functions for general PRE_PROCESSOR use.
+    
+    Created by M. Bogner OCTOBER 2008   
+*/
+
+/* modified October 2011 by M. Bogner to change signature of REVERIFICATION PROCEDURE  */
+
+/*  DECLARE ALL GLOBAL variables  */
+/*  none so far */
+
+
+  PROCEDURE PREPROCESSOR(SDI NUMBER, INTERVAL_PERIOD VARCHAR2, START_TIME  DATE, 
+		RESULT IN OUT FLOAT, VALIDATION IN OUT CHAR, DATA_FLAGS IN OUT VARCHAR2);
+  
+  PROCEDURE REVERIFICATION(P_SDI NUMBER, P_INTERVAL_PERIOD VARCHAR2, P_START_TIME  DATE, 
+		P_END_TIME DATE DEFAULT NULL, P_DO_INTERVAL_DELETE VARCHAR2 DEFAULT 'N');
+
+  PROCEDURE TEST_PACKAGE(SDI NUMBER, INTERVAL_PERIOD VARCHAR2, START_TIME  DATE, 
+		END_TIME DATE);
+		
+    
+END PRE_PROCESSOR;
+.
+/
+
+create or replace public synonym PRE_PROCESSOR for PRE_PROCESSOR;
+grant execute on PRE_PROCESSOR to app_role;

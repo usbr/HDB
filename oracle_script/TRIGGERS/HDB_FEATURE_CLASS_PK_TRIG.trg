@@ -1,0 +1,15 @@
+  CREATE OR REPLACE TRIGGER HDB_FEATURE_CLASS_PK_TRIG
+  BEFORE INSERT OR UPDATE ON HDB_FEATURE_CLASS
+  REFERENCING FOR EACH ROW
+  begin
+IF inserting THEN
+  IF populate_pk.pkval_pre_populated = FALSE THEN
+     :new.FEATURE_CLASS_ID := populate_pk.get_pk_val( 'HDB_FEATURE_CLASS', FALSE );
+  END IF;
+ELSIF updating THEN
+  :new.FEATURE_CLASS_ID := :old.FEATURE_CLASS_ID;
+END IF;
+end;
+/
+
+show errors trigger HDB_FEATURE_CLASS_PK_TRIG;

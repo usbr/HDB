@@ -1,3 +1,7 @@
+set echo on
+set feedback on
+spool hdb_primkeys.out
+
 ALTER user DBA 
 default tablespace hdb_idx
 quota unlimited on hdb_idx;
@@ -20,9 +24,11 @@ ALTER TABLE hdb_collection_system
             using index storage (initial 50k next 50k pctincrease 0)
             tablespace hdb_idx); 
 
-ALTER TABLE hdb_computed_datatype 
-      ADD ( CONSTRAINT hdb_computed_datatype_pk
-      PRIMARY KEY (computation_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));  
+-- removed for computation processor
+-- ALTER TABLE hdb_computed_datatype 
+--       ADD ( CONSTRAINT hdb_computed_datatype_pk
+--       PRIMARY KEY (computation_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));  
+-- 
 
 /*
 ALTER TABLE hdb_computed_datatype_component
@@ -53,9 +59,11 @@ ALTER TABLE hdb_date_time_unit
       ADD ( CONSTRAINT hdb_date_time_unit_pk
       PRIMARY KEY (date_time_unit) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));  
 
-alter table hdb_derivation_flag add constraint
-    hdb_derivation_flag_pk
-    primary key (derivation_flag) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+/* removed for CP project
+-- alter table hdb_derivation_flag add constraint
+--     hdb_derivation_flag_pk
+--     primary key (derivation_flag) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+*/
 
 ALTER TABLE hdb_divtype
       ADD ( CONSTRAINT hdb_divtype_pk
@@ -176,6 +184,18 @@ ALTER TABLE hdb_property
    ADD ( CONSTRAINT hdb_property_pk
          PRIMARY KEY (property_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0)); 
 
+alter table hdb_rating_algorithm
+add  constraint hdb_rating_algorithm_pk 
+     primary key (rating_algorithm) 
+     using index tablespace hdb_idx storage
+     (initial 64k next 100k pctincrease 0);
+
+alter table hdb_rating_type
+add  constraint hdb_rating_type_pk 
+     primary key (rating_type_common_name) 
+     using index tablespace hdb_idx storage
+     (initial 64k next 100k pctincrease 0);
+
 ALTER TABLE hdb_river 
       ADD ( CONSTRAINT hdb_river_pk
             PRIMARY KEY (river_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
@@ -187,6 +207,11 @@ ALTER TABLE hdb_river_reach
 ALTER TABLE hdb_site
       ADD ( CONSTRAINT hdb_site_pk
             PRIMARY KEY (site_id) using index tablespace hdb_idx storage (initial 60k next 60k pctincrease 0));
+
+ALTER TABLE DECODES_Site_ext
+      ADD ( CONSTRAINT decodes_site_ext_pk
+            PRIMARY KEY (SITE_ID) using index tablespace hdb_idx storage (initial 60k next 60k pctincrease 0));
+
 ALTER TABLE hdb_site_datatype 
       ADD ( CONSTRAINT hdb_site_datatype_pk
       PRIMARY KEY (site_datatype_id) using index tablespace hdb_idx storage (initial 100k next 100k pctincrease 0));   
@@ -227,6 +252,11 @@ ALTER TABLE ref_auth_site_datatype
       ADD ( CONSTRAINT ref_auth_sdi_pk
             PRIMARY KEY (role, site_datatype_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
 
+ALTER TABLE REF_DB_GENERIC_LIST
+      ADD CONSTRAINT REF_DB_GENERIC_LIST_PK 
+         PRIMARY KEY (RECORD_ID) 
+         using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+
 ALTER TABLE ref_db_list   
       ADD ( CONSTRAINT ref_db_list_pk
             PRIMARY KEY (session_no) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
@@ -235,13 +265,18 @@ ALTER TABLE ref_db_list
       ADD ( CONSTRAINT ref_db_list_uniq
             UNIQUE (db_site_code) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
 
-alter table ref_derivation_source add constraint
-    ref_derivation_source_pk
-    primary key (site_datatype_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+/* removed for CP project
+--  alter table ref_derivation_source add constraint
+--      ref_derivation_source_pk
+--      primary key (site_datatype_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+*/
 
-alter table ref_derivation_destination add constraint
-    ref_derivation_destination_pk
-    primary key (dest_site_datatype_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+/* removed for CP Project
+--  alter table ref_derivation_destination add constraint
+--      ref_derivation_destination_pk
+--      primary key (dest_site_datatype_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+*/
+
 
 ALTER TABLE ref_div  
       ADD ( CONSTRAINT ref_div_pk
@@ -250,6 +285,18 @@ ALTER TABLE ref_div
 ALTER TABLE ref_dmi_data_map    
       ADD ( CONSTRAINT ref_dmi_data_map_pk
             PRIMARY KEY (model_id, object_name, data_name) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
+
+ALTER TABLE REF_ENSEMBLE  add constraint REF_ENSEMBLE_PK
+primary key (ensemble_id) 
+using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+ 
+ALTER TABLE REF_ENSEMBLE_KEYVAL add constraint REF_ENSEMBLE_KEYVAL_PK
+primary key (ensemble_id,key_name) 
+using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
+
+ALTER TABLE REF_ENSEMBLE_TRACE  add constraint REF_ENSEMBLE_TRACE_PK 
+primary key (ensemble_id,trace_id,model_run_id) 
+using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
 
 alter table ref_ext_site_data_map
 add constraint ref_ext_site_data_map_pk
@@ -288,6 +335,11 @@ ALTER TABLE ref_hm_site_pcode
       ADD ( CONSTRAINT ref_hm_site_pcode_pk
             PRIMARY KEY (hm_site_code,hm_pcode, hm_filetype) using index tablespace hdb_idx storage (initial 150k next 150k pctincrease 0));
 
+alter table ref_interval_copy_limits  
+      ADD ( CONSTRAINT ricl_sdi_interval_pk
+            PRIMARY key (site_datatype_id,interval,EFFECTIVE_START_DATE_TIME)
+            using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
+
 alter table ref_interval_redefinition add constraint
     r_interval_redefinition_pk
     primary key (interval) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0);
@@ -300,6 +352,11 @@ ALTER TABLE ref_model_run_keyval
       ADD ( CONSTRAINT ref_model_run_keyval_pk
             PRIMARY KEY (model_run_id, key_name) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
 
+alter table ref_rating  add ( constraint ref_rating_pk 
+     primary key (rating_id, independent_value) 
+     using index tablespace hdb_idx storage
+     (initial 64k next 100k pctincrease 0));
+
 ALTER TABLE ref_res      
       ADD ( CONSTRAINT ref_res_pk  
             PRIMARY KEY (site_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));  
@@ -310,26 +367,34 @@ ALTER TABLE ref_res_flowlu
 ALTER TABLE ref_res_wselu
       ADD ( CONSTRAINT ref_res_wselu_pk
             PRIMARY KEY (site_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));         
+
 ALTER TABLE ref_site_attr
    ADD ( CONSTRAINT ref_site_attr_pk
          PRIMARY KEY (site_id, attr_id, effective_start_date_time)
 	 using index tablespace hdb_idx storage 
 	  (initial 50k next 50k pctincrease 0)); 
+	  
+alter table ref_site_rating
+add  constraint ref_site_rating_pk 
+     primary key (rating_id) 
+     using index tablespace hdb_idx storage
+     (initial 64k next 100k pctincrease 0);
+
 ALTER TABLE ref_site_coef
       ADD ( CONSTRAINT ref_site_coef_pk
-            PRIMARY KEY (site_id,attr_id,coef_idx) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
+            PRIMARY KEY (site_id,attr_id,coef_idx,effective_start_date_time) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));
 
 ALTER TABLE ref_site_coef_day 
       ADD ( CONSTRAINT ref_site_coef_day_pk
-            PRIMARY KEY (site_id,attr_id,day,coef_idx) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));          
+            PRIMARY KEY (site_id,attr_id,day,coef_idx,effective_start_date_time) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));          
 
 ALTER TABLE ref_site_coef_month 
       ADD ( CONSTRAINT ref_site_coef_month_pk
-            PRIMARY KEY (site_id,attr_id,month ,coef_idx) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));          
+            PRIMARY KEY (site_id,attr_id,month ,coef_idx,effective_start_date_time) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));          
 
 ALTER TABLE ref_site_coeflu
       ADD ( CONSTRAINT ref_site_coeflu_pk
-            PRIMARY KEY (site_id,lu_attr_id,lu_value,attr_id,coef_idx) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));    
+            PRIMARY KEY (site_id,lu_attr_id,lu_value,attr_id,coef_idx,effective_start_date_time) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));    
 
 ALTER TABLE ref_source_priority
       ADD ( CONSTRAINT ref_source_priority_pk
@@ -340,6 +405,26 @@ ALTER TABLE ref_str
       ADD ( CONSTRAINT ref_str_pk
             PRIMARY KEY (site_id) using index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));    
 
+
+ALTER TABLE ref_loading_application_prop
+      ADD ( CONSTRAINT ref_loading_application_p_pk
+            PRIMARY KEY (loading_application_id,prop_name) using index tablespace hdb_idx
+            storage (initial 50k next 50k pctincrease 0));
+
+
+ALTER TABLE ref_spatial_relation
+      ADD ( CONSTRAINT ref_spatial_relation_pk
+            PRIMARY KEY (a_site_id, b_site_id, attr_id, effective_start_date_time) using 
+      index tablespace hdb_idx storage (initial 50k next 50k pctincrease 0));  
+
+
+ALTER TABLE REF_USER_GROUPS ADD CONSTRAINT REF_USER_GROUPS_PK PRIMARY KEY (USER_NAME,GROUP_NAME) ENABLE;
+
+
 ALTER user DBA 
 default tablespace hdb_data
 quota unlimited on hdb_data;
+
+spool off
+exit
+

@@ -1,0 +1,15 @@
+CREATE OR REPLACE FUNCTION CFS2ACFT (cfs in NUMBER)
+return NUMBER
+IS
+
+BEGIN
+
+   return (cfs * (86400/43560));
+
+
+END;
+/
+
+show errors;
+GRANT EXECUTE ON CFS2ACFT TO PUBLIC;
+

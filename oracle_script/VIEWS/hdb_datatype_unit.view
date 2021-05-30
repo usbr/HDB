@@ -1,0 +1,13 @@
+CREATE OR REPLACE FORCE VIEW HDB_DATATYPE_UNIT 
+ ( "UNIT_IND", "DEST_ID", "DEST_NAME", "DIMENSION_NAME"
+  )  AS 
+  select 'D' unit_ind, datatype_id dest_id, datatype_name dest_name,
+  dimension_name dimension_name
+from hdb_datatype, hdb_dimension, hdb_unit
+where hdb_datatype.unit_id = hdb_unit.unit_id
+  and hdb_unit.dimension_id = hdb_dimension.dimension_id
+union
+select 'U' unit_ind, unit_id dest_id, unit_name dest_name, null
+from hdb_unit;
+
+grant select on HDB_DATATYPE_UNIT to public;

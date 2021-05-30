@@ -1,1 +1,10 @@
-drop package datatype_pkg;
+drop package cp_remote_trigger;
+drop package hdb_poet;
+drop package hdb_utilities;
+drop package pop_pk;
+drop package pre_processor;
+drop package ratings;
+drop package riverware_connection;
+-- new cp_processor package for CP UPGRADE 3.0
+drop package cp_processor;
+

@@ -47,6 +47,12 @@ CREATE OR REPLACE PACKAGE BODY populate_pk IS
 	    return loc_pk_val;
          ELSE
             loc_pk_val := loc_pk_val + 1;
+            /* this is required to integrate DECODES into HDB  since DECODES uses sequences
+               we need to insure that anyone adding sites must use the sequence
+               modification by Mark Bogner  Mary 2005  */
+            if (upper(table_name) = 'HDB_SITE') then
+              select hdb_site_sequence.nextval into loc_pk_val from dual;
+            end if;
             return loc_pk_val;
          END IF;
       END IF;
@@ -72,6 +78,25 @@ CREATE OR REPLACE PACKAGE BODY populate_pk IS
       --END IF;
       --return loc_pkval;
    END get_pk_val;
+
+  PROCEDURE SET_PRE_POPULATED ( P_SET_VALUE  NUMBER)
+   IS
+    BEGIN
+    /*  This procedure was written to set the PK populated boolean
+         0  = TRUE
+         anything else = FALSE
+        
+        this procedure written by Mark Bogner   May 2012                            */
+
+      IF P_SET_VALUE = 0 THEN
+        populate_pk.pkval_pre_populated := TRUE;
+      ELSE
+       populate_pk.pkval_pre_populated := FALSE;
+      END IF;
+
+        
+    END;  /* End of Procedure SET_PRE_POPULATED  */     
+
 
 END;
 /

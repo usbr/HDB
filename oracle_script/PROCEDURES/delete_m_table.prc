@@ -49,7 +49,7 @@ END;
 
 show errors;
 /
-create public synonym delete_m_table for delete_m_table;
+create or replace public synonym delete_m_table for delete_m_table;
 grant execute on delete_m_table to app_role;
 grant execute on delete_m_table to savoir_faire;
-grant execute on delete_m_table to model_role;
+grant execute on delete_m_table to model_priv_role;

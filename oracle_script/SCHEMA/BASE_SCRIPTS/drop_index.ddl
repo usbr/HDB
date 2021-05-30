@@ -8,6 +8,8 @@ drop index m_monthrange_date_idx;
 drop index m_monthstat_date_idx;
 drop index m_wy_date_idx;
 drop index m_year_date_idx;
+drop index REF_ENSEMBLE_NAME_UIDX; 
+drop index ref_site_rating_sanity_uk;
 drop index r_day_date_idx;
 drop index r_daystat_date_idx;
 drop index r_hour_date_idx;

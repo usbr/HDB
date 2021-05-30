@@ -1,3 +1,5 @@
+set echo on
+
 create or replace procedure
              check_valid_role_name
               (role      varchar2)
@@ -17,3 +19,5 @@ end;
 show errors;
 
 grant execute on check_valid_role_name to public;
+
+exit;

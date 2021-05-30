@@ -1,0 +1,29 @@
+set echo on
+set feedback on
+spool hdb_functions.out
+
+start ./FUNCTIONS/acl_mail.func
+start ./FUNCTIONS/colorize_value.func
+start ./FUNCTIONS/colorize_with_rbase.func
+start ./FUNCTIONS/colorize_with_validation.func
+start ./FUNCTIONS/dates_between.func
+start ./FUNCTIONS/flow_fwssd.func
+start ./FUNCTIONS/gsc.func
+start ./FUNCTIONS/instants_between.func
+start ./FUNCTIONS/stat_value.func
+start ./FUNCTIONS/stn.func
+start ./FUNCTIONS/sendmail.func
+start ./FUNCTIONS/plve.func
+start ./FUNCTIONS/gscm.func
+start ./FUNCTIONS/CFS2ACFT.func
+start ./FUNCTIONS/GET_HDB_SITE_COMMON_NAME.func
+start ./FUNCTIONS/GET_HDB_SITE_NAME.func
+start ./FUNCTIONS/GET_PK_VAL_WRAP.func
+start ./FUNCTIONS/GSNA.func
+start ./FUNCTIONS/timesteps_between.func
+start ./FUNCTIONS/GET_TS_XFER_DATA.func
+start ./FUNCTIONS/get_min_max_annotation.func
+start ./FUNCTIONS/find_rating.func
+start ./FUNCTIONS/is_role_granted.func
+spool off
+exit;

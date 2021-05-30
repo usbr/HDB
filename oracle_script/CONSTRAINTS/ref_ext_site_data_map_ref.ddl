@@ -24,12 +24,6 @@ add
 
 alter table ref_ext_site_data_map
 add
-  constraint ref_ext_site_data_map_fk5
-  foreign key (hdb_computation_id)
-  references  hdb_computed_datatype(computation_id);
-
-alter table ref_ext_site_data_map
-add
   constraint ref_ext_site_data_map_fk6
   foreign key (hdb_agen_id)
   references  hdb_agen(agen_id);
@@ -43,4 +37,9 @@ alter table ref_ext_site_data_map
 add 
   constraint check_is_active_y_n
   check (is_active_y_n in ('y', 'Y', 'n', 'N'));
+
+alter table ref_ext_site_data_map 
+  add constraint ref_esdm_computation_id_fk
+  foreign key (hdb_computation_id) references cp_computation (computation_id);
+
 

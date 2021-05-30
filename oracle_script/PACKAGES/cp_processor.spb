@@ -1,0 +1,237 @@
+
+CREATE OR REPLACE PACKAGE BODY CP_PROCESSOR AS 
+  
+  FUNCTION GET_TS_ID(P_SDI NUMBER, P_INTERVAL VARCHAR2, P_TABLE_SELECTOR VARCHAR2, P_MODEL_ID NUMBER)
+    RETURN NUMBER IS
+      l_ts_id NUMBER;
+    BEGIN
+    /*  This function was written to assist in finding the unique surrogate TS_ID
+        Number for a given timeseries in HDB.  The record is found in table CP_TS_ID.
+        If the record is not found, a negative -999 is returned.
+    
+        this function written by Mark Bogner   April 2012                            */
+
+         begin
+        select ts_id into l_ts_id
+          from cp_ts_id
+          where site_datatype_id = P_SDI 
+            and interval = P_INTERVAL
+            and table_selector = P_TABLE_SELECTOR 
+            and model_id = P_MODEL_ID;
+         exception when others then        
+	       l_ts_id := -999;
+       end;
+    RETURN (l_ts_id);
+  
+  END;  /* End of Function GET_TS_ID  */ 
+
+
+   PROCEDURE CREATE_TS_ID(
+    P_SDI NUMBER, 
+    P_INTERVAL VARCHAR2, 
+    P_TABLE_SELECTOR VARCHAR2, 
+    P_MODEL_ID NUMBER,
+    P_TS_ID IN OUT NUMBER ) IS
+
+      /* the local variables         */
+      l_ts_id number;
+      l_count number;
+      l_model_id number;
+      procedure_indicator varchar2(100);
+      temp_chars varchar2(100);
+      l_text     varchar2(200);
+      
+ BEGIN
+/*  This procedure was written to assist in the CP processing to create a record in HDB
+    in table CP_TS_ID so that the unique representation of a time series record can be 
+    represented.
+    
+    NOTE:  p_model_id is -1 for real time data
+    
+    NOTE: This procedure not only creates a new TS_ID, but it also will check
+          for an existing ts_id based on the input parameters and either way
+          return a correct TS_ID.
+          
+    this procedure written by Mark Bogner   April 2012          
+    Modified July 31 2012 by M. Bogner to to add sanity checks for new entries   
+    */
+
+    procedure_indicator := 'CREATE_TS_ID FAILED FOR: ';
+/*  first do error checking  */
+    IF P_SDI IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> SITE_DATATYPE_ID');
+	ELSIF P_INTERVAL IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> INTERVAL');
+	ELSIF P_TABLE_SELECTOR IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> TABLE SELECTOR');
+	ELSIF P_MODEL_ID is NULL THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID <NULL> MODEL_ID');
+    END IF;
+
+/* validate the interval via a select from the hdb_interval table  */
+    BEGIN
+      select interval_name into temp_chars
+        from hdb_interval
+        where interval_name = P_INTERVAL;
+       exception when others then 
+       DENY_ACTION(procedure_indicator || 'INVALID ' || P_INTERVAL || ' INTERVAL');
+    END;
+
+     /* validate the Table Selector  */
+	IF P_TABLE_SELECTOR not in ('R_','M_') THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID ' || P_TABLE_SELECTOR || 'TABLE SELECTOR');
+    END IF;
+    
+	IF P_TABLE_SELECTOR = 'R_' AND P_MODEL_ID > 0 THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID ' || P_TABLE_SELECTOR || 'TABLE SELECTOR' ||
+		 ' WITH NON_VALID MODEL_ID: ' || to_char(P_MODEL_ID));
+    END IF;
+        
+	IF P_TABLE_SELECTOR = 'M_' AND P_MODEL_ID < 1 THEN 
+		DENY_ACTION(procedure_indicator || 'INVALID ' || P_TABLE_SELECTOR || 'TABLE SELECTOR' ||
+		 ' WITH NON_VALID MODEL_ID: ' || to_char(P_MODEL_ID));
+    END IF;
+ 
+ /* temp disable sanity checks */
+if ( 'xxx' = 'yyy' ) then
+    /* check for valid interval types for this records attributes  */
+    if (P_INTERVAL = 'instant') then
+
+     if ( P_TABLE_SELECTOR = 'M_' ) then
+        l_text := 'Instant interval invalid for Modeled Data';
+        deny_action(l_text);
+     end if;
+
+     select count(*) into l_count 
+     from hdb_datatype dt, hdb_site_datatype sd
+     where dt.allowable_intervals in ('instant','either') 
+       and sd.site_datatype_id = P_SDI
+       and sd.datatype_id = dt.datatype_id;
+
+     if (l_count = 0) then
+        l_text := 'Invalid INSTANT Interval for this SDI: ' || to_char(P_SDI);
+        deny_action(l_text);
+     end if;
+
+    end if;
+
+    /* 
+      Datatype's allowable intervals must be either or non-instant 
+      for non-instant data */
+    if (P_INTERVAL <> 'instant') then
+
+       select count(*) into l_count 
+       from hdb_datatype dt, hdb_site_datatype sd
+       where dt.allowable_intervals in ('non-instant','either') 
+         and sd.site_datatype_id = P_SDI
+         and sd.datatype_id = dt.datatype_id;
+
+       if (l_count = 0) then
+          l_text := 'Invalid NON-INSTANT Interval: ' || P_INTERVAL || ' for this SDI: ' || to_char(P_SDI);
+          deny_action(l_text);
+       end if;
+
+    end if;
+    /* end of the data sanity checks  */
+     end if;  /* temp shutoff of sanity checks  */
+ 
+	/* Do a merge to go see if there is a record with these values already in CP_TS_ID */
+	/*  if not, then the merge will do an insert, using -1 as ts_id since on insert trigger will populate  */
+    BEGIN
+       merge into CP_TS_ID CPT
+       using (
+       select P_SDI "SDI",P_INTERVAL "INTERVAL",P_TABLE_SELECTOR "TABLE_SELECTOR", P_MODEL_ID "MODEL_ID"
+       from dual
+       ) MV
+       on (CPT.SITE_DATATYPE_ID = MV.SDI and CPT.INTERVAL = MV.INTERVAL and CPT.TABLE_SELECTOR = MV.TABLE_SELECTOR
+           and CPT.MODEL_ID = MV.MODEL_ID)
+       WHEN NOT MATCHED THEN INSERT 
+       (CPT.TS_ID,CPT.SITE_DATATYPE_ID,CPT.INTERVAL,CPT.TABLE_SELECTOR,CPT.MODEL_ID,CPT.DATE_TIME_LOADED)
+       values (-1,MV.SDI,MV.INTERVAL,MV.TABLE_SELECTOR,MV.MODEL_ID,sysdate);
+    END;
+		
+	/* so things should have succeeded here so finish up and return  the assigned
+	   TS_ID. for the input parameters
+	*/
+	P_TS_ID := GET_TS_ID(P_SDI, P_INTERVAL, P_TABLE_SELECTOR, P_MODEL_ID);
+	
+  END; /*  create_ts_id procedure  */
+
+
+  PROCEDURE POPULATE_CP_COMP_DEPENDS(P_TS_ID NUMBER, P_COMPUTATION_ID NUMBER)
+   IS
+    BEGIN
+    /*  This procedure was written to Populate table CP_COMP_DEPENDS
+        as a preliminary requirement for the HDB phase 3.0 requirement
+        Design decision was to do a merge statement and have this as a stand alone procedure
+        to do the merge statement since this procedure will come in handy in other needs
+        
+        this procedure written by Mark Bogner   April 2012                            */
+
+        merge into CP_COMP_DEPENDS CPD
+        using ( select P_TS_ID "TS_ID",P_COMPUTATION_ID "COMPUTATION_ID" from dual ) MV
+        on (CPD.TS_ID = MV.TS_ID and CPD.COMPUTATION_ID = MV.COMPUTATION_ID)
+        WHEN NOT MATCHED THEN INSERT (CPD.TS_ID,CPD.COMPUTATION_ID)
+        values (MV.TS_ID,MV.COMPUTATION_ID);
+        
+    END;  /* End of Procedure POPULATE_CP_COMP_DEPENDS  */     
+
+
+  PROCEDURE PRE_POPULATE_COMP_DEPENDS IS
+      l_ts_id NUMBER;
+    BEGIN
+    /*  This procedure was written to assist in the population of the CP_TS_ID and CP_COMP_DEPENDS
+        for existing non-group computations already defined in exiting HDB databases and
+        as a preliminary requirement for the HDB phase 3.0 requirement
+    
+        this procedure written by Mark Bogner   April 2012                            */
+     /* now handle current computations a bit differently so as to populate CP_COMP_DEPENDS  */
+     FOR C1 in  
+     (
+       /* get the needed input for table CP_TS_ID from all the defined active computations */
+       select distinct cc.computation_id, ccts.site_datatype_id, ccts.interval, ccts.table_selector, 
+       nvl(ccts.model_id,-1) "MODEL_ID"
+       from  cp_computation cc, cp_comp_ts_parm ccts, cp_algo_ts_parm catp
+       where 
+             UPPER(cc.enabled) = 'Y' 
+        and  cc.loading_application_id is not null
+        and  cc.computation_id = ccts.computation_id
+        and  cc.algorithm_id = catp.algorithm_id
+        and  ccts.algo_role_name = catp.algo_role_name
+        and  LOWER(catp.parm_type) like 'i%'
+        and  ccts.table_selector in ('R_','M_')
+        and  nvl(cc.group_id, -1) = -1
+      )
+      LOOP
+         /* loop through these rows and enter each into CP_TS_ID via procedure call */
+         CP_PROCESSOR.create_ts_id (C1.SITE_DATATYPE_ID,C1.INTERVAL,C1.TABLE_SELECTOR,C1.MODEL_ID,l_ts_id);
+         /* take the computation_id and the l_ts_id from the procedure call and do a merge into CP_COMP_DEPENDS */
+         CP_PROCESSOR.populate_cp_comp_depends(l_ts_id,C1.COMPUTATION_ID); 
+         /* commit the two merge statements that were accomplished */
+         commit;
+      END LOOP;   /* end of for C1 loop */      
+   
+    END;  /* End of Procedure PRE_POPULATE_TSID  */     
+  
+
+  PROCEDURE TEST_PACKAGE(P_SDI NUMBER, P_INTERVAL VARCHAR2, P_TABLE_SELECTOR VARCHAR2, P_MODEL_ID NUMBER)
+    IS
+      l_ts_id NUMBER;
+      l_temp_code VARCHAR2(1);
+    BEGIN
+    /*  This function was written to assist in the testing of this packages objects
+    
+        this function written by Mark Bogner   April 2012                            */
+
+      l_ts_id := 0;
+--    CP_PROCESSOR.create_ts_id (P_SDI, P_INTERVAL, P_TABLE_SELECTOR, P_MODEL_ID,l_ts_id);
+--    commit;
+--    CP_PROCESSOR.EVAL_HIERARCHICAL_GROUP_SITE(P_SDI, P_MODEL_ID, l_temp_code);
+--    --DENY_ACTION('TS_ID: ' || to_char(l_ts_id));
+  
+  END;  /* End of Function TEST_PACKAGE  */ 
+
+END CP_PROCESSOR;  /* Package End  */
+
+.
+/

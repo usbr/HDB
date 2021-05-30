@@ -1,0 +1,124 @@
+
+CREATE OR REPLACE PACKAGE BODY CP_REMOTE_TRIGGER AS 
+
+  PROCEDURE POST_ON_TASKLIST(
+    P_LOADING_APPLICATION_ID	NUMBER,
+    P_SITE_DATATYPE_ID			NUMBER,
+    P_INTERVAL					VARCHAR2,
+    P_TABLE_SELECTOR			VARCHAR2,
+    P_START_DATE_TIME			DATE,
+	P_MODEL_RUN_ID				NUMBER,
+	P_VALUE						NUMBER,
+	P_VALIDATION				VARCHAR2,
+    P_DERIVATION_FLAGS			VARCHAR2,
+    P_DELETE_FLAG				VARCHAR2) IS
+    
+    
+    BEGIN
+    
+	/*  this procedure written by M. Bogner  May 2010
+      the purpose of this procedure is to place rows into the cp_comp_tasklist table when
+      with the data passed to this procedure 
+												  */
+    
+		insert into cp_comp_tasklist(
+		record_num, loading_application_id,
+		site_datatype_id,interval,table_selector,
+		value,date_time_loaded,start_date_time,delete_flag,model_run_id,validation,data_flags
+		)
+		values (
+		cp_tasklist_sequence.nextval,P_LOADING_APPLICATION_ID,
+		P_SITE_DATATYPE_ID,P_INTERVAL,P_TABLE_SELECTOR,P_VALUE,sysdate,P_START_DATE_TIME,P_DELETE_FLAG,
+		P_MODEL_RUN_ID,P_VALIDATION,P_DERIVATION_FLAGS
+		);
+
+  END; /*  POST_ON_TASKLIST procedure  */
+
+  PROCEDURE REMOTE_DATA_CHANGED(
+    P_SITE_DATATYPE_ID		NUMBER,
+    P_INTERVAL				VARCHAR2,
+    P_START_DATE_TIME		DATE,
+    P_MODEL_RUN_ID			NUMBER,
+	P_VALUE					NUMBER,
+	P_VALIDATION			VARCHAR2,
+    P_DERIVATION_FLAGS		VARCHAR2,
+    P_DELETE_FLAG			VARCHAR2) IS
+    
+    CURSOR is_rec_a_parameter(sdi NUMBER, p_interval VARCHAR2, sdt DATE) IS  
+		select site_datatype_id, loading_application_id, interval, table_selector,
+		model_id, computation_id,computation_name,algorithm_id,algorithm_name
+		from cp_active_sdi_tsparm_view
+		where site_datatype_id = sdi
+		and table_selector not in ('R_','M_')
+		and interval = p_interval
+		and sdt between effective_start_date_time and effective_end_date_time;  
+    
+    BEGIN
+    
+	/*  this procedure written by M. Bogner  May 2010
+      the purpose of this procedure is to place rows into the cp_comp_tasklist table when
+      Data has been received from a remote database call and this data is defined as an 
+      input parameter of an active calculation  */
+      
+   
+	/*  now go see if there are any active computation definitions for this record      */
+	/*  if there are records from this cursor then put all records from the cursor
+		into the cp_comp_task_list table                                                */
+
+		FOR p1 IN is_rec_a_parameter(p_site_datatype_id, p_interval, p_start_date_time) LOOP
+    
+			cp_remote_trigger.post_on_tasklist(p1.loading_application_id,p_site_datatype_id,
+			p_interval,p1.table_selector,p_start_date_time,p_model_run_id,
+			p_value,p_validation,p_derivation_flags,p_delete_flag);
+    
+		END LOOP;
+
+
+    END; /*  REMOTE_DATA_CHANGED procedure  */
+
+  	
+ PROCEDURE TRIGGER_REMOTE_CP(
+    P_DB_LINK				VARCHAR2,
+    P_SITE_DATATYPE_ID		NUMBER,
+    P_INTERVAL				VARCHAR2,
+    P_START_DATE_TIME		DATE,
+    P_MODEL_RUN_ID			NUMBER,
+	P_VALUE					NUMBER,
+	P_VALIDATION			VARCHAR2,
+    P_DERIVATION_FLAGS		VARCHAR2,
+    P_DELETE_FLAG			VARCHAR2)
+  IS
+  /* do not remove this pragma statement !!!!  */
+  pragma autonomous_transaction;
+                                                                  
+  ex_statement varchar2(2000);
+                                                                               
+BEGIN                                                                           
+
+  /*  this procedure written by M. Bogner  JUNE 2010
+      the purpose of this procedure is to call a remote database to put a record in the
+      cp_tasklist table to trigger it's local computations
+  
+  Note: that this procedure is an autonomous transaction and must remain so for current processing
+  
+  */
+  		/* build the sql block statement to call the proper remote database  */
+  		ex_statement :=
+		'BEGIN CP_REMOTE_TRIGGER.REMOTE_DATA_CHANGED@' || p_db_link || 
+		'(:b1,:b2,:b3,:b4,:b5,:b6,:b7,:b8); END;'; 
+
+		/* now execute the sql block using the proper bind variables   */
+		execute immediate (ex_statement) using P_SITE_DATATYPE_ID,P_INTERVAL,P_START_DATE_TIME,
+			P_MODEL_RUN_ID,P_VALUE,P_VALIDATION,P_DERIVATION_FLAGS,P_DELETE_FLAG;  
+   
+  /*  autonomous transactions must be explicitly commited or rolled back or an error will result  */
+  commit;
+     
+END;  /*  end of trigger_remote_cp  */                                                                             	
+
+
+
+END CP_REMOTE_TRIGGER; 
+
+.
+/

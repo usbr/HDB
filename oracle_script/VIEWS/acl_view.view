@@ -1,0 +1,8 @@
+create or replace view ACL_VIEW as
+select hdb_site.site_id,hdb_site.site_name,ref_site_attr.string_value "GROUP_NAME"
+from hdb_site,ref_site_attr
+where ref_site_attr.attr_id = hdb_utilities.get_site_acl_attr
+and   ref_site_attr.site_id = hdb_site.site_id;
+
+create or replace public synonym ACL_VIEW for ACL_VIEW;
+grant select on ACL_VIEW to public;

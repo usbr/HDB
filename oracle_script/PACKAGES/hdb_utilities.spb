@@ -1,0 +1,1673 @@
+CREATE OR REPLACE PACKAGE BODY HDB_UTILITIES AS 
+
+	FUNCTION SET_MANUAL_EDIT (INPUT_VALUE VARCHAR2)
+	RETURN VARCHAR2 IS
+	BEGIN 
+		MANUAL_EDIT := INPUT_VALUE;
+		RETURN(MANUAL_EDIT); 
+	END;
+	
+
+	FUNCTION GET_MANUAL_EDIT 
+	RETURN VARCHAR2 IS
+	BEGIN 
+		RETURN(NVL(MANUAL_EDIT,'Y')); 
+	END;
+
+
+	FUNCTION GET_SITE_ACL_ATTR 
+	RETURN NUMBER IS
+	temp_num NUMBER;
+	
+	BEGIN 
+		/* this function was written to return the attribute primary key
+		   for the ACL group attribute for a site
+		*/
+		/* written by M. Bogner for ACL project March 2010  */   
+		
+		begin   
+			/*  do a query to get the sites ACL attribute ID  */	
+			select distinct attr_id into temp_num from hdb_attr,ref_db_parameter, global_name
+			where hdb_attr.attr_name = ACLG_NAME
+			and  global_name.global_name = ref_db_parameter.global_name
+			and  (ref_db_parameter.param_name = ACL_NAME
+			 or   ref_db_parameter.param_name = ACL_NAME_II)
+			and  ref_db_parameter.active_flag = 'Y';
+
+			exception when others then temp_num := -1;
+
+		end;
+			
+		return temp_num;
+		
+	END;  /* function get_site_acl_attr  */
+
+
+	FUNCTION IS_FEATURE_ACTIVATED(P_FEATURE VARCHAR2) 
+	RETURN VARCHAR2 IS
+      temp_num NUMBER;
+	BEGIN 
+		/* this function was written to return a y or n for a
+		   request of whether a release feature is currently 
+		   enabled for the current database
+		*/
+		/* written by M. Bogner for ACL project II October 2011  */   
+
+        begin		   
+		  /*  see if feature is activated  */	
+		  select count(*) into temp_num  
+		   from ref_db_parameter, global_name where
+		   global_name.global_name = ref_db_parameter.global_name
+		   and ref_db_parameter.active_flag = 'Y'
+		   and ref_db_parameter.param_name = P_FEATURE;
+
+          /* something is wrong with the sql or database so don't return a Y  */
+		  exception when others then temp_num := -1;
+		
+		end;
+		
+		/* if project is activated then continue by returning a Y       */
+		IF (temp_num > 0) THEN
+			RETURN 'Y';
+		END IF;
+		/* otherwise it must not be enabled  */
+		RETURN 'N';
+		
+	END;  /* function is_feature_activated  */
+
+
+	FUNCTION IS_ROLE_ACTIVATED(P_ROLE_NAME VARCHAR2) 
+	RETURN VARCHAR2 IS
+	BEGIN 
+		/* this function was written to return a y or n for a
+		   request of whether a role is currently enabled for a
+		   user
+		*/
+		/* written by M. Bogner for ACL project March 2010  */   
+		   
+		/*  see if role is activated  */	
+		IF (DBMS_SESSION.IS_ROLE_ENABLED(P_ROLE_NAME)) THEN
+			RETURN 'Y';
+		END IF;
+		/* othewise it must not be enabled  */
+		RETURN 'N';
+		
+	END;  /* function is_role_activated  */
+
+
+	FUNCTION IS_SDI_IN_ACL(P_SITE_DATATYPE_ID NUMBER) 
+	RETURN VARCHAR2 IS
+	temp_num NUMBER;
+	ACLversionI Boolean;
+	ACLversionII Boolean;
+	
+	BEGIN 
+		/* this function was written to return a y or n for a
+		   request of whether an SDI  is currently enabled for a
+		   particular user and his ACL group
+		*/
+		/* written by M. Bogner for ACL project March 2010  */   
+		/* modified by M. Bogner for ACL project Version II OCT 2011  */   
+		   
+	    ACLversionI := false;
+	    ACLversionII := false;
+	    
+	    /* if sdi is null return N */
+	    IF (p_site_datatype_id is null) THEN
+	      RETURN 'N';
+	    END IF;
+
+	    /* if sdi doesn't exist return N */
+	    select count(*) into temp_num  from  hdb_site_datatype where
+	    site_datatype_id = p_site_datatype_id;   	
+	    IF (temp_num = 0) THEN
+	      RETURN 'N';
+	    END IF;
+	    
+		/* see if ACL Project is enabled  */
+	    IF (hdb_utilities.is_feature_activated(ACL_NAME) = 'Y') THEN
+	      ACLversionI := true;
+	    END IF;
+	    
+		/* see if ACL PROJECT II is enabled  */
+	    IF (hdb_utilities.is_feature_activated(ACL_NAME_II) = 'Y') THEN
+	      ACLversionII := true;
+	    END IF;
+	    
+		/* if neither project is activated then continue by returning a Y       */
+		IF (NOT ACLversionI AND NOT ACLversionII) THEN
+			RETURN 'Y';
+		END IF;
+		   
+		/* see if user account is an active DBA ACCOUNT  */
+		select count(*) into temp_num  from ref_user_groups 
+		where user_name = user and group_name = 'DBA' and active_flag = 'Y';
+		IF (temp_num > 0) THEN
+			RETURN 'Y';
+		END IF;
+
+        /*  Is the user an active special DBA ACL member?                    */
+		/*  see if sdi is not under some other Group name control    */	
+        /*  this additional check added for ACL version II           */
+        /*  only do this if ACL version II is enabled                */
+        
+		IF ( ACLversionII ) THEN
+		  select count(*) into temp_num  from
+		   (select distinct site_id from hdb_site_datatype,ref_user_groups 
+		   where user_name = user
+		   and active_flag = 'Y'
+		   and site_datatype_id = p_site_datatype_id
+		   and group_name = 'DBA ACLII'
+		   minus
+		   select site_id from acl_view where group_name <> 'DBA ACLII');
+
+		  IF (temp_num > 0) THEN
+		    RETURN 'Y';
+		  END IF;
+		
+		END IF;
+		
+		/*  see if sdi is under an active user and its group name perview  */	
+
+		select count(*) into temp_num  from acl_view where group_name in
+		(select group_name from ref_user_groups where user_name = user and active_flag = 'Y')
+		and site_id in 
+		(select distinct site_id from hdb_site_datatype 
+		 where site_datatype_id = p_site_datatype_id);
+
+		IF (temp_num > 0) THEN
+			RETURN 'Y';
+		END IF;
+
+		/* otherwise this sdi must not be enabled for this user and groupname  */
+		RETURN 'N';
+		
+	END;  /* function is_sdi_in_acl  */
+
+
+ FUNCTION DATE_IN_WINDOW (   
+    INTERVAL         VARCHAR2,
+    INPUT_DATE_TIME  DATE)
+    RETURN VARCHAR2 IS	
+    new_start_date_time date;
+    new_end_date_time date;
+    redef   number;
+    temp_num number;
+    temp_char varchar2(100);
+    in_window varchar2(1) := 'N';
+    
+	BEGIN
+	/*  This function was written to be determine if the date of a sample is in the current
+		date window.
+                          
+    this procedure written by Mark Bogner   August 2007          */
+
+	/*  see if there is a definition of an interval at the database level in the  */
+	/*  ref_interval_redefinition  table if not,  redef will be zero              */
+	/*  currently only Water Year WY has been redefined                           */
+     BEGIN
+      temp_char := interval;
+      select time_offset into redef
+        from ref_interval_redefinition 
+        where interval = temp_char;
+       exception when others then 
+       redef := 0;
+     END;
+
+	/* now calculate the current date window for this interval based on redefinitions                   */
+	/* this code is written assuming an interval can only be redefined to the next lowest interval unit */
+	/* even though the redefinition table allows you to specify a unit.  this makes little sense        */
+	/* and probably will never be utilized anyway                                                       */
+	/*  the following code just used for testing and debugging......
+	insert into temp1 values ('time1: '|| to_char(new_start_date_time));
+	insert into temp1 values ('redef: '|| to_char(redef));
+	insert into temp1 values ('offset: '|| to_char(offset));
+	insert into temp1 values ('END DATE: ' || to_char(new_end_date_time));
+	*/
+
+    CASE  interval
+     WHEN 'instant' THEN 
+        new_start_date_time := trunc(sysdate - redef/1440,'HH') + redef/1440;
+        new_end_date_time := new_start_date_time + 1/24;
+     WHEN 'hour' THEN 
+        new_start_date_time := trunc(sysdate - redef/1440,'HH') + redef/1440;
+        new_end_date_time := new_start_date_time + 1/24;
+     WHEN 'day' THEN 
+        new_start_date_time := trunc(sysdate - redef/24,'DD') + redef/24;
+        new_end_date_time := new_start_date_time + 1;
+     WHEN 'month' THEN 
+        new_start_date_time := trunc(sysdate - redef,'MON') + redef;
+        new_end_date_time := add_months(new_start_date_time,1);
+     WHEN 'year' THEN 
+        new_start_date_time := add_months(sysdate,redef*-1);
+        new_start_date_time := add_months(trunc(new_start_date_time,'Y'),redef);
+        new_end_date_time := add_months(new_start_date_time,12);
+     WHEN 'wy' THEN 
+        new_start_date_time := add_months(sysdate,redef*-1);
+        new_start_date_time := add_months(trunc(new_start_date_time,'Y'),redef);
+        new_end_date_time := add_months(new_start_date_time,12);
+    END CASE;
+
+
+    /* now we are done  with the checks so set the inwindow if the input date is between     */
+    /* the two determined window dates                                                       */
+ 
+	IF (new_start_date_time <= input_date_time and input_date_time <= new_end_date_time) THEN
+       in_window := 'Y';
+	END IF;
+ 
+    RETURN(in_window); 
+  end;
+
+
+	FUNCTION GET_SDI_UNIT_FACTOR (
+	  SDI NUMBER) 
+	RETURN FLOAT IS
+		return_value FLOAT;
+	BEGIN 
+	/* this function returns the multiplication factor of the unit associated with 
+	   the input site_datatype_id
+	*/
+	
+	/*  this function written by M. Bogner  12/06/2007  */
+	
+		begin
+		return_value := 0.0;
+		select c.mult_factor  into return_value
+		  from hdb_site_datatype a, hdb_datatype b, hdb_unit c
+		  where a.site_datatype_id = sdi
+		  and a.datatype_id = b.datatype_id
+		  and b.unit_id = c.unit_id;
+		
+		exception when others then return_value := 0.0;
+		end;
+		
+	   return (return_value);
+	END;
+
+	Function DAYLIGHTSAVINGSTIMESTART (p_Date IN Date) 
+	Return Date Is 
+		v_Date       Date; 
+		v_LoopIndex  Integer; 
+		l_sunday_count Integer;
+	Begin 
+	/*  this function written by M. Bogner  11/09/2010  */
+    /* this function returns the date the DST time period ends  */ 
+	--Set the date to the 1st day of March  
+		v_Date := to_date('03/01/' || to_char(p_Date,'YYYY') || '02:00:00 AM','MM/DD/YYYY HH:MI:SS PM'); 
+		--Advance to the second Sunday. 
+		l_sunday_count := 0;
+		FOR v_LoopIndex IN 0..14 LOOP 
+		  If (RTRIM(to_char(v_Date + v_LoopIndex,'DAY')) = 'SUNDAY') Then 
+			l_sunday_count := l_sunday_count + 1;
+			If (l_sunday_count = 2) then
+				Return v_Date + v_LoopIndex; 
+			End if;
+		  End If; 
+		END LOOP; 
+	End; 
+
+	Function DAYLIGHTSAVINGSTIMEEND(p_Date IN Date) 
+	Return Date Is 
+		v_Date       Date; 
+		v_LoopIndex  Integer; 
+	Begin
+	/*  this function written by M. Bogner  11/09/2010  */
+	/* this function returns the date the DST time period ends  */ 
+	--Set Date to the first of November this year 
+	v_Date := to_date('11/01/' || to_char(p_Date,'YYYY') || '02:00:00 AM','MM/DD/YYYY HH:MI:SS PM'); 
+	--Advance to the first Sunday 
+		FOR v_LoopIndex IN 0..7 LOOP 
+		 If (RTRIM(to_char(v_Date + v_LoopIndex,'DAY')) = 'SUNDAY') Then 
+			Return v_Date + v_LoopIndex; 
+		 End If; 
+		END LOOP; 
+	End; 
+
+	Function IS_DATE_IN_DST (p_Date IN Date,p_DST_ZONE IN VARCHAR2,p_default_zone IN VARCHAR2) 
+	Return VARCHAR2 Is 
+		v_Date       Date; 
+		v_LoopIndex  Integer; 
+		l_is_it_DST VARCHAR2(5);
+	Begin 
+	/*  this function written by M. Bogner  11/09/2010  */
+	/* this function tells whether a date is within the DST time period  */
+		l_is_it_dst := P_DEFAULT_ZONE;
+		BEGIN
+			select p_DST_ZONE into l_is_it_dst from dual where p_date between 
+			DAYLIGHTSAVINGSTIMESTART(p_date)and 
+			DAYLIGHTSAVINGSTIMEEND(p_date);
+			exception when others then
+			  l_is_it_dst := p_default_zone;
+		END;
+		RETURN l_is_it_dst;
+	End; 
+
+    FUNCTION MOD_DATE_FOR_TIME_ZONE(P_DATE IN DATE, P_TIME_ZONE IN VARCHAR2)
+	Return Date Is 
+		l_db_timezone VARCHAR2(3);
+	Begin
+	/*  this function written by M. Bogner  May 11 2012  */
+	/* this function returns the parameter date based on the parameter P_TIME_ZONE  */ 
+    /*  NOTE: ONLY call this function for intervals of instant and hour  */
+ 
+    IF (P_DATE is null  OR P_TIME_ZONE is null) THEN
+      RETURN P_DATE;
+    END IF;
+    
+    /* get the databases default time zone  */
+      BEGIN
+        select param_value into l_db_timezone
+          from ref_db_parameter, global_name
+          where param_name = 'TIME_ZONE'
+          and global_name.global_name = ref_db_parameter.global_name
+          and nvl(active_flag,'Y') = 'Y';
+         exception when others then 
+          l_db_timezone := NULL;
+      END;
+
+    /* now convert the start_time to the database time if different  */ 
+    IF (P_TIME_ZONE <> l_db_timezone) THEN
+       RETURN new_time(P_DATE,P_TIME_ZONE,l_db_timezone);     
+    END IF;
+
+    /*  Otherwise the time zones must be the same or undefined so just return the same date  */
+    RETURN P_DATE;
+
+	End;  /* end of Function MOD_DATE_FOR_TIME_ZONE  */
+
+    FUNCTION GET_DB_PARAMETER(P_PARAMETER VARCHAR2)
+	Return VARCHAR2 Is 
+		l_db_parameter VARCHAR2(64) := NULL;
+	Begin
+	/*  this function written by M. Bogner  July 20 2012  */
+	/* this function returns the parameter value from ref_db_parameter based on the parameter P_PARAMETER  */ 
+    
+    IF (P_PARAMETER is null ) THEN
+      RETURN l_db_parameter;
+    END IF;
+    
+    /* get the databases parameter  */
+      BEGIN
+        select param_value into l_db_parameter
+          from ref_db_parameter, global_name
+          where param_name = P_PARAMETER
+          and global_name.global_name = ref_db_parameter.global_name
+          and nvl(active_flag,'Y') = 'Y';
+         exception when others then 
+          l_db_parameter := NULL;
+      END;
+
+    /*  just return the local parameter from the query  */
+    RETURN l_db_parameter;
+
+	End;  /* end of Function GET_DB_PARAMETER  */
+
+PROCEDURE standardize_dates(
+    SITE_DATATYPE_ID NUMBER,
+    INTERVAL         VARCHAR2,
+    START_DATE_TIME  IN OUT DATE,
+    END_DATE_TIME    IN OUT DATE) IS
+    new_start_date_time date;
+    new_end_date_time date;
+    offset  number;
+    redef   number;
+    temp_num number;
+    temp_char varchar2(100);
+    
+BEGIN
+/*  This procedure was written to be the interface to 
+    HDB by standardizing start and end dates of records in R_BASE.
+                          
+    this procedure written by Mark Bogner   December 2006          */
+/* modified by M. Bogner  December 2006 for date standardizing with windowing    */
+/* modified by M. Bogner  Jan 2007 for date standardizing without windowing     */
+/* modified by M. Bogner  August 2007 for date standardizing without windowing     */
+/* modified by M. Bogner  May 2008 for use of ref_interval_copy_limits for time offsets     */
+
+
+/* first find if there is a time offset for this particular SDI  */
+/*  in the ref_interval_copy_limits table if none then the offset will be zero */
+    BEGIN
+      temp_num := site_datatype_id;
+      temp_char := interval;
+      select nvl(time_offset_minutes,0)/1440 into offset
+        from ref_interval_copy_limits 
+        where site_datatype_id = temp_num and interval = temp_char;
+       exception when others then 
+       offset := 0;
+    END;
+
+/*  see if there is a definition of an interval at the database level in the  */
+/*  ref_interval_redefinition  table if not,  redef will be zero              */
+/*  currently only Water Year WY has been redefined                           */
+    BEGIN
+      temp_char := interval;
+      select time_offset into redef
+        from ref_interval_redefinition 
+        where interval = temp_char;
+       exception when others then 
+       redef := 0;
+    END;
+
+/* now calculate the destination window for this record based on redefinitions and time offsets */
+/* this code is written assuming an interval can only be redefined to the next lowest interval unit */
+/* even though the redefinition table allows you to specify a unit.  this makes little sense        */
+/* and probably will never be utilized anyway                                                       */
+/*  the following code just used for testing and debugging......
+insert into temp1 values ('time1: '|| to_char(new_start_date_time));
+insert into temp1 values ('redef: '|| to_char(redef));
+insert into temp1 values ('offset: '|| to_char(offset));
+insert into temp1 values ('END DATE: ' || to_char(new_end_date_time));
+*/
+/*insert into temp1 values ('Beginsdt: '|| to_char(start_date_time,'dd-mon-yyyy HH24:mi:ss')); */
+
+    CASE  interval
+     WHEN 'instant' THEN 
+          new_start_date_time := start_date_time;
+          new_end_date_time := start_date_time;
+     WHEN 'hour' THEN 
+        new_start_date_time := trunc(start_date_time - offset - redef/1440,'HH') + redef/1440;
+        new_end_date_time := new_start_date_time + 1/24;
+     WHEN 'day' THEN 
+        new_start_date_time := trunc(start_date_time - offset - redef/24,'DD') + redef/24;
+        new_end_date_time := new_start_date_time + 1;
+     WHEN 'month' THEN 
+        new_start_date_time := trunc(start_date_time - offset - redef,'MON') + redef;
+        new_end_date_time := add_months(new_start_date_time,1);
+     WHEN 'year' THEN 
+        new_start_date_time := add_months(start_date_time - offset,redef*-1);
+        new_start_date_time := add_months(trunc(new_start_date_time,'Y'),redef);
+        new_end_date_time := add_months(new_start_date_time,12);
+     WHEN 'wy' THEN 
+        new_start_date_time := add_months(start_date_time - offset,redef*-1);
+        new_start_date_time := add_months(trunc(new_start_date_time,'Y'),redef);
+        new_end_date_time := add_months(new_start_date_time,12);
+     ELSE 
+          new_start_date_time := start_date_time;
+          new_end_date_time := end_date_time;
+    END CASE;
+
+
+/* now we are done  with the checks so set the return dates    */
+
+     start_date_time := new_start_date_time;
+     end_date_time := new_end_date_time;
+       
+END; /* end of procedure standardize dates  */
+
+PROCEDURE validate_r_base_record(
+    SITE_DATATYPE_ID NUMBER,
+    INTERVAL         VARCHAR2,
+    START_TIME		 DATE,
+    VALUE            NUMBER,
+    VALIDATION  IN OUT VARCHAR2) IS
+    temp_validation varchar2(1);
+    temp_min_exp    number;
+    temp_max_exp    number;
+    temp_min_cut    number;
+    temp_max_cut    number;
+    temp_sdi        number;
+    temp_interval   varchar2(16);
+    
+BEGIN
+/*  This procedure was written to be the interface to 
+    HDB for the validation of an input record.  This procedure only validates for records that
+    exist in ref_derivation_source table.  This procedure currently only duplicates the
+    basic validation that was done by the derivation application.
+                          
+    this procedure written by Mark Bogner   November 2006          */
+    
+/* modified by M. Bogner  Jan 2007 to incorporate new ref_interval_copy_limits table   */
+/* modified by M. Bogner  March 2008 to not require entry ref_interval_copy_limits table   */
+
+    temp_sdi := site_datatype_id;
+    temp_interval := interval;
+    temp_validation := 'V';
+      
+    /* do some basic math of the value against the defined ranges and cutoffs
+       null math here will pass the validation                                 */  
+    select min_value_expected-value,min_value_cutoff-value,
+           max_value_expected-value,max_value_cutoff-value
+    into temp_min_exp,temp_min_cut,
+         temp_max_exp,temp_max_cut
+    from ref_interval_copy_limits where site_datatype_id = temp_sdi
+     and interval = temp_interval
+     and effective_start_date_time <= start_time
+     and nvl(effective_end_date_time,sysdate+1) > start_time;
+     
+     /* now check to see if the value is within specifications   */
+     IF temp_min_cut > 0 then  temp_validation := 'F';
+     ELSIF temp_max_cut < 0 then  temp_validation := 'F';
+     ELSIF temp_min_exp > 0 then  temp_validation := 'L';
+     ELSIF temp_max_exp < 0 then  temp_validation := 'H';
+     END IF;      
+     
+     /* temp_validation will have the validation result by now so set the validation variable  */
+     validation := temp_validation;
+     
+     /*  if there was no definition, validation will be what was passed in when procedure returns  */
+     EXCEPTION
+     WHEN OTHERS THEN null;
+
+  END;  /* procedure validate_r_base_record  */
+ 	
+ PROCEDURE computations_cleanup IS
+                                                                    
+  CURSOR get_historic_recs is
+  select site_datatype_id, interval, loading_application_id, start_date_time, end_date_time, 
+  table_selector, model_run_id
+  from cp_historic_computations where ready_for_delete is not null;
+  
+  mrid_part   varchar2(1000);
+  i_statement varchar2(2000);
+                                                                              
+BEGIN                                                                           
+
+  /*  this procedure written by M. Bogner  December 2007
+      the purpose of this procedure is to place rows into the cp_comp_tasklist table when
+      Data has been inserted into the cp_historic_calculations table for historic calculations
+      to be performed once the interval time spread has past and this data is defined as 
+      an input parameter of an active calculation  */
+  
+  /* first update all records in cp_historic_calculations where end_date_time is now in the past  */
+  update cp_historic_computations set ready_for_delete = 'Y' where end_date_time < sysdate;
+      
+/*  if there are time series records from this cursor then put the first record we find with the
+    specifications of the record into the cp_comp_task_list table                    */
+
+	FOR p1 IN get_historic_recs LOOP
+		
+		/* add the model_run_id criteria if this is model data */
+        IF (p1.table_selector = 'M_') then 
+			mrid_part := ' model_run_id = ' || to_char(p1.model_run_id);   
+		ELSE
+			mrid_part := ' 1=1 ';
+		END IF;
+    
+		i_statement :=
+		'insert into cp_comp_tasklist(record_num, loading_application_id,site_datatype_id,interval,' ||
+		'table_selector,value,date_time_loaded,start_date_time,delete_flag,model_run_id) ' ||
+		' select cp_tasklist_sequence.nextval, ' || to_char(p1.loading_application_id) || ',site_datatype_id,''' ||
+		p1.interval || ''', ''' || p1.table_selector || ''',value,sysdate,start_date_time,''N'',' ||
+		to_char(p1.model_run_id) || ' from ' || p1.table_selector || p1.interval || ' where  ' ||
+		' rownum = 1 and ' ||
+		' site_datatype_id = ' || to_char(p1.site_datatype_id) || ' and ' ||
+		' start_date_time >= ' || 
+        ' to_date(''' || to_char(p1.start_date_time,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		' start_date_time <= ' ||
+        ' to_date(''' || to_char(p1.end_date_time,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		mrid_part;
+		
+		/* now execute this dynamic sql statement */
+		--insert into temp1 values (i_statement);
+		execute immediate (i_statement);
+	
+
+	END LOOP;  /* internal loop for all calculations for this particular 
+  
+
+  /*  finally cleanup all the records in cp_historic_computations that have ready_for_delete set  */
+  delete from cp_historic_computations where ready_for_delete is not null;
+   
+END;  /*  end of computations_cleanup  */                                                                             	
+ 	
+ 	
+  	
+ PROCEDURE COMPUTATIONS_PROCESSING(LOADING_APP_ID NUMBER, SDI NUMBER, INTERVAL VARCHAR2, INPUT_DATE_TIME DATE, 
+            TABLE_SELECTOR VARCHAR2, COMPUTATION_ID NUMBER, COMPUTATION_NAME VARCHAR2, ALGORITHM_ID NUMBER, 
+            ALGORITHM_NAME VARCHAR2, MODEL_RUN_ID NUMBER, DELETE_FLAG VARCHAR2, DATA_FLAGS VARCHAR2)
+  IS
+  /* do not remove this pragma statement !!!!  */
+  pragma autonomous_transaction;
+                                                                  
+  mrid_part   varchar2(1000);
+  i_statement varchar2(2000);
+  s_statement varchar2(2000);
+  interval_SDT DATE;
+  interval_EDT DATE;
+  oi_SDT DATE;
+  oi_EDT DATE;
+  new_interval VARCHAR2(24);
+  temp_char VARCHAR2(100);
+  temp_id NUMBER;
+  temp_count NUMBER;
+  earliest_sdt DATE;
+                                                                               
+BEGIN                                                                           
+
+  /*  this procedure written by M. Bogner  January 2008
+      the purpose of this procedure is to perform additional processing if needed on any record deemed
+      an input parameter to a computation.
+  
+  Presently the only additional processing is for EOPinterpolated and time weighted algorithms but I added e
+  everything one may need as parameters in case other computations need more stuff done too
+  
+  Note: that this procedure is an autonomous transaction and must remain so for current processing
+  
+  Modified 8/27/2008 by M. Bogner to also trigger EOP calculations for previous period
+  */
+   
+  /*  if the algorithms are eopinterpolated or Time weighted then do a bunch of testing to see if the previous
+      or the following time periods are affected otherwise do nothing and just return  */
+
+  
+  IF UPPER(algorithm_name) IN ('EOPINTERPALG','TIMEWEIGHTEDAVERAGEALG') THEN  /*  BOP BLOCK  */
+
+   /* this block will test to see if the record was the the BOP record */
+   /* now go get the overall interval for this record  */
+ 
+   temp_id := computation_id;
+   temp_char := table_selector;
+   select interval into new_interval from cp_comp_ts_parm where computation_id = temp_id and  
+   algo_role_name = 'output' and table_selector = temp_char;
+   
+  /* now use standardize dates to get the overall interval  */
+
+   interval_sdt :=   input_date_time;
+   standardize_dates (SDI,new_interval,interval_SDT,interval_EDT);
+   oi_SDT := interval_sdt - 60/86400;  /* a minute before */
+   standardize_dates (SDI,new_interval,oi_SDT,oi_EDT); 
+
+	/* see if this record is the first record in the time interval   */
+	  /* add the model_run_id criteria if this is model data */
+      IF (table_selector = 'M_') then 
+			mrid_part := ' model_run_id = ' || to_char(model_run_id);   
+	  ELSE
+			mrid_part := ' 1=1 ';
+	  END IF;
+    
+		s_statement :=
+		' select count(*) from ' || table_selector || interval || ' where  ' ||
+		' site_datatype_id = ' || to_char(sdi) || ' and ' ||
+		' start_date_time >= ' || 
+        ' to_date(''' || to_char(interval_SDT,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		' start_date_time < ' ||
+        ' to_date(''' || to_char(input_date_time,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		mrid_part;
+		
+		/* now execute this dynamic sql select statement */
+		execute immediate (s_statement) INTO temp_count;
+		
+	  if (temp_count = 0) then
+		/* then was first record in the interval and will impact the previous interval's computation  */
+		i_statement :=
+		'insert into cp_comp_tasklist(record_num, loading_application_id,site_datatype_id,interval,' ||
+		'table_selector,value,date_time_loaded,start_date_time,delete_flag,model_run_id,data_flags) ' ||
+		' select cp_tasklist_sequence.nextval, ' || to_char(loading_app_id) || ',site_datatype_id,''' ||
+		interval || ''', ''' || table_selector || ''',value,sysdate,start_date_time,''N'',' ||
+		to_char(model_run_id) || ', derivation_flags from ' || table_selector || interval || ' where  ' ||
+		' rownum = 1 and ' ||
+		' site_datatype_id = ' || to_char(sdi) || ' and ' ||
+		' start_date_time >= ' || 
+        ' to_date(''' || to_char(oi_sdt,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		' start_date_time < ' ||
+        ' to_date(''' || to_char(oi_edt,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		mrid_part;
+		
+		/* now execute this dynamic sql statement */
+		/* and insert a record into the complist table to initiate a  computation  */
+		execute immediate (i_statement);
+
+	  end if;  /* the record was the first in the series  */
+
+
+   END IF;  /* the bulk of the interpolated and time weighted average processing  for BOP record*/
+
+
+   
+  IF UPPER(algorithm_name) IN ('TIMEWEIGHTEDAVERAGEALG') THEN  /*  TWA EOP BLOCK  */
+   /* this block will test to see if the record was the  EOP record  to see if we need to initiate
+      a TWA computation for the following interval 
+  */
+  
+  /* now go get the overall interval for this record  */
+   temp_id := computation_id;
+   temp_char := table_selector;
+   select interval into new_interval from cp_comp_ts_parm where computation_id = temp_id and  
+   algo_role_name = 'output' and table_selector = temp_char;
+   
+   /* now use standardize dates to get the overall interval for the following interval period */
+   interval_sdt :=   input_date_time;
+   standardize_dates (SDI,new_interval,interval_SDT,interval_EDT);
+   oi_SDT := interval_edt + 60/86400;  /* a minute after current interval*/
+   standardize_dates (SDI,new_interval,oi_SDT,oi_EDT); 
+
+	/* see if this record is the first record in the time interval   */
+	  /* add the model_run_id criteria if this is model data */
+      IF (table_selector = 'M_') then 
+			mrid_part := ' model_run_id = ' || to_char(model_run_id);   
+	  ELSE
+			mrid_part := ' 1=1 ';
+	  END IF;
+    
+		s_statement :=
+		' select count(*) from ' || table_selector || interval || ' where  ' ||
+		' site_datatype_id = ' || to_char(sdi) || ' and ' ||
+		' start_date_time <= ' || 
+        ' to_date(''' || to_char(interval_EDT,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		' start_date_time > ' ||
+        ' to_date(''' || to_char(input_date_time,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		mrid_part;
+		
+		/* now execute this dynamic sql select statement to see if there is a later record in 
+		   this time interval*/
+		execute immediate (s_statement) INTO temp_count;
+		
+	  if (temp_count = 0) then
+		/* then was last record in the interval and will impact the following interval's computation  */
+		i_statement :=
+		'insert into cp_comp_tasklist(record_num, loading_application_id,site_datatype_id,interval,' ||
+		'table_selector,value,date_time_loaded,start_date_time,delete_flag,model_run_id,data_flags) ' ||
+		' select cp_tasklist_sequence.nextval, ' || to_char(loading_app_id) || ',site_datatype_id,''' ||
+		interval || ''', ''' || table_selector || ''',value,sysdate,start_date_time,''N'',' ||
+		to_char(model_run_id) || ', derivation_flags from ' || table_selector || interval || ' where  ' ||
+		' rownum = 1 and ' ||
+		' site_datatype_id = ' || to_char(sdi) || ' and ' ||
+		' start_date_time >= ' || 
+        ' to_date(''' || to_char(oi_sdt,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		' start_date_time < ' ||
+        ' to_date(''' || to_char(oi_edt,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'') and ' ||
+		mrid_part;
+		
+		/* now execute this dynamic sql statement */
+		/* and insert a record into the complist table to initiate a  computation  */
+		execute immediate (i_statement);
+
+	  end if;  /* the record was the first in the series  */
+
+   END IF;  /* the bulk of the time weighted average processing  for EOP record*/
+   
+   
+  /*  autonomous transactions must be explicitly commited or rolled back or an error will result  */
+  commit;
+     
+END;  /*  end of computations_processing  */                                                                             	
+
+
+PROCEDURE merge_into_r_interval(
+    SITE_DATATYPE_ID NUMBER,
+    INTERVAL         VARCHAR2,
+    START_DATE_TIME  DATE,
+    END_DATE_TIME    DATE,
+    VALUE            FLOAT,
+    VALIDATION       CHAR,
+    OVERWRITE_FLAG   VARCHAR2,
+    METHOD_ID        NUMBER,
+    DATA_FLAGS       VARCHAR2,
+    DATE_TIME_LOADED DATE  ) IS
+    usingpart   varchar2(1000);
+    part0   varchar2(1000);
+    part1   varchar2(1000);
+    part2   varchar2(1000);
+    part3   varchar2(1000);
+    indicator varchar2(1);
+    m_statement varchar2(2000);
+    
+BEGIN
+/*  This procedure was written to be the interface to 
+    HDB from the COMPUTATION application whenever data was inserted
+    into the table R_BASE then a copy of that record into it's
+    respective r_interval table is also expected.  The logic to call
+    this merge statement is in the r_base triggers and those triggers
+    only call this procedure if the r_base data was validated 
+*/
+
+/*    or an overwrite flag of 'O' was set.  removed August 2007 by M.  Bogner   */
+/*  modified 8/31/07 by M. Bogner to put in call to set manual_edit             */
+/*  modified 4/09/08 by M. Bogner to put in passage of method_id                */
+/*  modified 6/16/09 by M. Bogner to correct use of sysdate in merge statement  */
+                          
+/* now its time to put the data into the interval table, using a merge statement       */
+/* since the record may already be there.  To avoid a messy if then else structure,  */
+/* a dynamic merge statement will be created to do this dml.                           */
+/* create the using part which will query the passed in parameters from the dual table */
+   usingpart := '( select ' || 
+     to_char(site_datatype_id) || ' SITE_DATATYPE_ID,' ||
+     '''' || interval || '''' || ' INTERVAL,' ||
+     'to_date(''' || to_char(start_date_time,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'')' || ' START_DATE_TIME,' ||
+     'to_date(''' || to_char(end_date_time,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'')' || ' END_DATE_TIME,' ||
+     to_char(value) || ' VALUE,' ||
+     '''' || overwrite_flag || '''' || ' OVERWRITE_FLAG,' ||
+     to_char(method_id) || ' METHOD_ID,' ||
+     '''' || data_flags || '''' || ' DATA_FLAGS,' ||
+     '''' || validation || '''' || ' VALIDATION,' ||
+     'to_date(''' || to_char(date_time_loaded,'dd-MON-YYYY HH24:MI:SS') || ''',''dd-MON-YYYY HH24:MI:SS'')' || ' DATE_TIME_LOADED' ||
+     ' from dual ) rb';
+      
+/* create a dynamic merge statement that will merge the values received by R_base trigger with the correct interval table  */
+   part0 := 'merge into r_'|| interval ||' rt using ';
+   part1 :=   ' on (rt.site_datatype_id = rb.site_datatype_id and rt.start_date_time = rb.start_date_time' ||
+     '  and rt.end_date_time= rb.end_date_time' ||
+     '  and rb.site_datatype_id = ';
+
+   part2 := to_char(site_datatype_id) || ' and rb.interval = ''' || interval || '''' ;
+
+   part3 := '  and rb.start_date_time = to_date(''' ||
+     to_char(start_date_time,'dd-MON-YYYY HH24:MI:SS') || 
+     ''',''dd-MON-YYYY HH24:MI:SS'')  and rb.end_date_time = to_date(''' ||
+     to_char(end_date_time,'dd-MON-YYYY HH24:MI:SS') || 
+     ''',''dd-MON-YYYY HH24:MI:SS''))';
+
+/* now form the whole merge statement by combining parts 1,2,3, usingpart and the final part of the statement  */
+   m_statement := part0 || usingpart|| part1 || part2 || part3 ||
+     ' when matched then update ' ||
+     ' set value =rb.value, date_time_loaded = rb.date_time_loaded, overwrite_flag = rb.overwrite_flag, ' ||
+     ' method_id = rb.method_id, derivation_flags = rb.data_flags, validation = rb.validation ' ||
+     ' when not matched then insert ' ||
+     ' (rt.site_datatype_id,rt.start_date_time,rt.end_date_time,rt.date_time_loaded,rt.value,rt.validation,rt.method_id,rt.derivation_flags,rt.overwrite_flag) ' ||
+     ' values ' ||
+     ' (rb.site_datatype_id,rb.start_date_time,rb.end_date_time,rb.date_time_loaded,rb.value,rb.validation,rb.method_id,rb.data_flags,rb.overwrite_flag) ';
+
+/* HDB_UTILITIES to set the manual edit to 'N'  */
+   indicator := hdb_utilities.set_manual_edit('N');
+
+/* now execute this dynamic sql statement */
+    execute immediate (m_statement);
+  
+END; /*  end of procedure merge into r_interval  */
+
+PROCEDURE delete_from_interval(
+    SITE_DATATYPE_ID NUMBER,
+    INTERVAL         VARCHAR2,
+    START_DATE_TIME  DATE,
+    END_DATE_TIME    DATE,
+    DATE_TIME_LOADED DATE ) IS
+    del_statement varchar2(2000);
+BEGIN
+/*  This procedure was written to be the interface to 
+    HDB from the COMPUTATION application whenever data was deleted
+    from the table R_BASE the copy of that record in it's
+    respective r_interval table is also expected to be deleted.
+                          
+    this procedure written by Mark Bogner   November 2006          */
+/*  modified by M.  Bogner DEcember 2006 to add delete by the date time loaded  */
+
+/* create a dynamic sql statement that will delete the record from the r_ interval
+   table  based on the passed in sdi and dates.                                    */
+   
+   del_statement := 'delete from r_' || interval || ' where site_datatype_id = ' || to_char(site_datatype_id) ||
+   '  and start_date_time = to_date(''' ||
+   to_char(start_date_time,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')  and end_date_time = to_date(''' ||
+   to_char(end_date_time,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')' || 
+   '  and date_time_loaded = to_date(''' ||
+   to_char(date_time_loaded,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')';
+
+/* now execute this dynamic sql statement */
+   execute immediate (del_statement);
+
+END; /*  delete from interval procedures  */
+
+
+
+PROCEDURE touch_for_recompute(
+    SITE_DATATYPE_ID NUMBER,
+    INTERVAL         VARCHAR2,
+    START_TIME  DATE,
+    END_TIME    DATE DEFAULT NULL) IS
+    up_statement varchar2(2000);
+	procedure_indicator varchar2(100);
+    indicator varchar2(1);
+    temp_chars varchar2(30);
+    END_TIME_TEMP DATE;
+    rows_touched NUMBER;
+ BEGIN
+/*  This procedure was written to assist people in "touching" a record in HDB
+    so that the record would appeared to be changed and hence, spawn any 
+    computations that this record may be a part of. 
+                          
+    this procedure written by Mark Bogner   May 2008          */
+
+/* modified by M. Bogner 9/06/2008 to put commit in to reduce 
+   table locking possibilities in a multiuser environment        */
+   
+	procedure_indicator := 'TOUCH_FOR_RECOMPUTE FAILED FOR: ';
+/*  first do error checking  */
+    IF SITE_DATATYPE_ID IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> SITE_DATATYPE_ID' );
+	ELSIF INTERVAL IS NULL THEN DENY_ACTION ( procedure_indicator || 'INVALID <NULL> INTERVAL' );
+	ELSIF START_TIME IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> START_TIME' );
+	ELSIF END_TIME < START_TIME THEN DENY_ACTION (procedure_indicator || 'INVALID END_TIME : < START_TIME' );
+    END IF;
+
+/* validate the interval via a select from the hdb_interval table  */
+    BEGIN
+      select interval_name into temp_chars
+        from hdb_interval
+        where interval_name = interval;
+       exception when others then 
+       DENY_ACTION (procedure_indicator || 'INVALID ' || interval || ' INTERVAL' );
+    END;
+
+/*  if end time was passed in null or used default null then set to start_time  */
+	END_TIME_TEMP := END_TIME;
+	IF END_TIME IS NULL THEN 
+	  END_TIME_TEMP := START_TIME;
+	END IF;
+	
+/* create a dynamic sql statement that will update the records in the r_ interval
+   table  based on the passed in sdi and dates.                                    */
+   
+   up_statement := 'update r_' || interval || ' set source_id = source_id where site_datatype_id = ' || to_char(site_datatype_id) ||
+   '  and start_date_time >= to_date(''' ||
+   to_char(start_time,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')  and start_date_time <= to_date(''' ||
+   to_char(END_TIME_TEMP,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')';
+   
+/* HDB_UTILITIES to set the manual edit to 'N'  */
+   indicator := hdb_utilities.set_manual_edit('N');
+
+/* now execute this dynamic sql statement */
+   execute immediate (up_statement);
+   rows_touched := SQL%ROWCOUNT;
+   /* error out if no rows were update!!!  */
+   IF rows_touched < 1 THEN
+     DENY_ACTION (procedure_indicator || ' SDI:  ' || to_char(site_datatype_id) || ' with ' 
+     || interval || ' INTERVAL and START DATE: ' || to_char(start_time) || ' Resulted in no rows update.');
+   END IF;
+
+/* finally do a commit since this procedure was successful and 
+   a commit will reduce possible deadlock issues  */
+   commit;
+
+END; /*  touch_for_recompute procedures  */
+
+
+PROCEDURE touch_cp_computation(
+    COMPUTATION_ID NUMBER) IS	
+  /* do not remove this pragma statement !!!!  */
+  /* removed by M. Bogner  13 AUg 2012 because of commit was causing a reace condition with depends daemon  */
+  /*pragma autonomous_transaction; */
+  procedure_indicator varchar2(100);    
+  COMP_ID NUMBER;
+BEGIN
+/*
+  THis procedure written to update the date_time_loaded column for
+  the cp_computation table so that people can modify the properties 
+  and parameters via sql and the triggers will call this procedure to 
+  update the column with the sysdate.
+                          
+  this procedure written by Mark Bogner   MAY 2008  
+  modified by M. Bogner 13-AUG-2013 to remove autonomous transaction since it
+  was causing a race condition for the DEPENDS DAEMON
+  
+*/
+  procedure_indicator := 'UPDATE_CP_COMPUTATION FAILED FOR: ';
+  comp_id := computation_id;
+  
+  IF COMP_ID IS NULL THEN 
+    DENY_ACTION (procedure_indicator || 'INVALID <NULL> COMPUTATION_ID' );
+  END IF;
+
+/* update the start_date_time column in the cp_computation table  */
+  BEGIN
+      update cp_computation set date_time_loaded = sysdate where computation_id = comp_id;
+    exception when others then null;
+  END;
+
+/*  autonomous transactions must be explicitly commited or rolled back or an error will result  */
+/*  commit;  */
+/* This commit and the autonomous transaction was purposefully removed by M. Bogner  */
+ 
+END; /*  touch_cp_computation procedure  */
+  
+
+PROCEDURE daily_ops IS	
+BEGIN
+/*
+  THis procedure written to perform any daily operations that must be performed
+  on the database since the implementation of the Calculation Application.
+                          
+  this procedure written by Mark Bogner   JUNE 2008                   */
+ /* this procedure modified 28-JUNE-2013 my M. Bogner
+    when it was discovered that there was a conflict with upper and 
+    lowercase standards of "HDB" and "hdb"
+    in the DECODES.datattype table                                    */ 
+  BEGIN
+-- this line finishes up partial calculations
+    hdb_utilities.computations_cleanup;
+
+-- this line will add any datatypes that may have been recently created
+    insert into datatype
+    select datatype_id,'HDB',datatype_id from hdb_datatype 
+    minus select id,standard,id from datatype where standard = 'HDB';
+
+    exception when others then DENY_ACTION ('Daily Operations Procedure Failed' );
+
+  END;
+ 
+END; /*  daily_ops procedure  */
+  
+
+PROCEDURE RE_EVALUATE_RBASE(
+    SITE_DATATYPE_ID NUMBER,
+    INTERVAL         VARCHAR2,
+    START_TIME  DATE,
+    END_TIME    DATE DEFAULT NULL) IS
+    del_statement varchar2(2000);
+	procedure_indicator varchar2(100);
+    indicator varchar2(1);
+    temp_chars varchar2(30);
+    END_TIME_TEMP DATE;
+    rows_touched NUMBER;
+    p_site_datatype_id NUMBER;
+    p_interval VARCHAR2(16);
+    
+ BEGIN
+/*  This procedure was written to assist people in "touching" a record in HDB
+    R_BASE table so that the record would appeared to be changed and hence, 
+    trigger an update to this record so that the record would be treated as 
+    an update an re-validated. 
+                          
+    this procedure written by Mark Bogner   March 2009          */
+
+   
+	procedure_indicator := 'RE_EVALUATE_RBASE FAILED FOR: ';
+/*  first do error checking  */
+    IF SITE_DATATYPE_ID IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> SITE_DATATYPE_ID' );
+	ELSIF INTERVAL IS NULL THEN DENY_ACTION ( procedure_indicator || 'INVALID <NULL> INTERVAL' );
+	ELSIF START_TIME IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> START_TIME' );
+	ELSIF END_TIME < START_TIME THEN DENY_ACTION (procedure_indicator || 'INVALID END_TIME : < START_TIME' );
+    END IF;
+
+/* validate the interval via a select from the hdb_interval table  */
+    BEGIN
+      select interval_name into temp_chars
+        from hdb_interval
+        where interval_name = interval;
+       exception when others then 
+       DENY_ACTION (procedure_indicator || 'INVALID ' || interval || ' INTERVAL' );
+    END;
+
+	/* set up the temporary parameters needed for the SQL */
+	p_site_datatype_id := site_datatype_id;
+	p_interval := interval;
+	
+/*  if end time was passed in null or used default null then set to start_time  */
+	END_TIME_TEMP := END_TIME;
+	IF END_TIME IS NULL THEN 
+	  END_TIME_TEMP := START_TIME;
+	END IF;
+	
+/* create a dynamic sql statement that will delete any existing records in the r_ interval
+   table  based on the passed in sdi and dates in case the records may now fail validation.                              */
+   
+   del_statement := 'delete from r_' || interval || ' rt where exists ( select ''x'' from r_base rb ' ||
+   ' where rb.site_datatype_id = ' || to_char(site_datatype_id) ||
+   ' and rb.interval = ''' || interval || '''' ||
+   ' and rb.start_date_time >= to_date(''' ||
+   to_char(start_time,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')  and rb.start_date_time <= to_date(''' ||
+   to_char(END_TIME_TEMP,'dd-MON-YYYY HH24:MI:SS') || 
+   ''',''dd-MON-YYYY HH24:MI:SS'')' ||
+   ' and rb.site_datatype_id = rt.site_datatype_id ' ||
+   ' and rb.start_date_time = rt.start_date_time )';
+   
+/* HDB_UTILITIES to set the manual edit to 'N'  */
+   indicator := hdb_utilities.set_manual_edit('N');
+
+/* now execute this dynamic sql statement */
+   execute immediate (del_statement);
+   
+   /* now touch the rows in r_base so that they are re-evaluated  */
+   update r_base set validation = null, data_flags= null,
+    date_time_loaded = to_date('10-DEC-1815') where site_datatype_id = p_site_datatype_id
+    and interval = p_interval and 
+    start_date_time between start_time and end_time_temp;
+
+   rows_touched := SQL%ROWCOUNT;
+   /* error out if no rows were update!!!  */
+   IF rows_touched < 1 THEN
+     DENY_ACTION (procedure_indicator || ' SDI:  ' || to_char(site_datatype_id) || ' with ' 
+     || interval || ' INTERVAL and START DATE: ' || to_char(start_time) || ' Resulted in no rows updated.');
+   END IF;
+
+/* finally do a commit since this procedure was successful and 
+   a commit will reduce possible deadlock issues  */
+   commit;
+
+END; /*  re_evaluate_rbase procedure  */
+
+  
+PROCEDURE SET_OVERWRITE_FLAG(
+    SITE_DATATYPE_ID	NUMBER,
+    INTERVAL			VARCHAR2,
+    START_DATE_TIME		DATE,
+    END_DATE_TIME		DATE DEFAULT NULL,
+    OVERWRITE_FLAG		VARCHAR2,
+    TIME_ZONE           VARCHAR2 DEFAULT NULL) IS
+	procedure_indicator varchar2(100);
+	indicator varchar2(1);
+	temp_chars varchar2(30);
+    rows_touched NUMBER;
+    p_site_datatype_id NUMBER;
+    p_interval VARCHAR2(16);
+    p_overwrite_flag VARCHAR2(1);
+    p_start_date_time DATE;
+    p_end_date_time DATE;
+    
+    
+ BEGIN
+/*  This procedure was written to assist people in clearing or setting a record in HDB
+    R_BASE table so that the record would modify the overwrite _flag, 
+    trigger an update to this record so that the record would be either locked or have 
+    the lock cleared. 
+                          
+    this procedure written by Mark Bogner   October 2009          */
+
+/* added Time zone parameter May 2012 to fix POET BUG for modifying Overwrite flag from other Time zones  */
+   
+	procedure_indicator := 'SET OVERWRITE FLAG: ';
+/*  first do error checking  */
+    IF SITE_DATATYPE_ID IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> SITE_DATATYPE_ID' );
+	ELSIF INTERVAL IS NULL THEN DENY_ACTION ( procedure_indicator || 'INVALID <NULL> INTERVAL' );
+	ELSIF START_DATE_TIME IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> START_DATE_TIME' );
+	ELSIF END_DATE_TIME < START_DATE_TIME THEN DENY_ACTION (procedure_indicator || 'INVALID END_DATE_TIME : < START_DATE_TIME' );
+	ELSIF nvl(OVERWRITE_FLAG,'^') not in ('O','^') THEN DENY_ACTION (procedure_indicator || 'INVALID OVERWRITE FLAG : ' || OVERWRITE_FLAG );
+    END IF;
+
+/* validate the interval via a select from the hdb_interval table  */
+    BEGIN
+      select interval_name into temp_chars
+        from hdb_interval
+        where interval_name = interval;
+       exception when others then 
+       DENY_ACTION (procedure_indicator || 'INVALID ' || interval || ' INTERVAL' );
+    END;
+
+	/* set up the temporary parameters needed for the SQL */
+	p_site_datatype_id := site_datatype_id;
+	p_interval := interval;
+	p_overwrite_flag := overwrite_flag;
+	p_start_date_time := START_DATE_TIME;
+/* modified May 2012 to consider the flags may be modified from users who set the time zone differently  */
+/*  so rest the dates based on if the interval is instant or hour and if the time zone is different      */
+    p_end_date_time := END_DATE_TIME;
+	IF (p_interval in ('instant','hour')) THEN
+	  p_start_date_time := MOD_DATE_FOR_TIME_ZONE(p_start_date_time, TIME_ZONE);
+   	  p_end_date_time := MOD_DATE_FOR_TIME_ZONE(p_end_date_time, TIME_ZONE);
+	END IF;	
+/*  if end time was passed in null or used default null then set to start_date_time  */
+	IF P_END_DATE_TIME IS NULL THEN 
+	  P_END_DATE_TIME := p_start_date_time;
+	END IF;
+	   
+/* HDB_UTILITIES to set the manual edit to 'N'  */
+   indicator := hdb_utilities.set_manual_edit('N');
+   
+   /* now touch the rows in r_base so that the overwrite_flag is update  */
+   update r_base set overwrite_flag = p_overwrite_flag,
+    date_time_loaded = to_date('10-DEC-1815') where site_datatype_id = p_site_datatype_id
+    and interval = p_interval and 
+    start_date_time between p_start_date_time and p_end_date_time;
+
+   rows_touched := SQL%ROWCOUNT;
+   /* error out if no rows were update!!!  */
+   IF rows_touched < 1 THEN
+     DENY_ACTION (procedure_indicator || ' SDI:  ' || to_char(site_datatype_id) || ' with ' 
+     || interval || ' INTERVAL and START DATE: ' || to_char(start_date_time) || ' Resulted in no rows updated.');
+   END IF;
+
+/* finally do a commit since this procedure was successful and 
+   a commit will reduce possible deadlock issues  */
+   commit;
+
+END; /*  set_overwrite procedure  */
+    
+   
+PROCEDURE SET_VALIDATION(
+    SITE_DATATYPE_ID	NUMBER,
+    INTERVAL			VARCHAR2,
+    START_DATE_TIME		DATE,
+    END_DATE_TIME		DATE DEFAULT NULL,
+    VALIDATION_FLAG		VARCHAR2,
+    TIME_ZONE           VARCHAR2 DEFAULT NULL) IS
+	procedure_indicator varchar2(100);
+	indicator varchar2(1);
+	temp_chars varchar2(30);
+    rows_touched NUMBER;
+    p_site_datatype_id NUMBER;
+    p_interval VARCHAR2(16);
+    p_validation VARCHAR2(1);
+    p_start_date_time DATE;
+    p_end_date_time DATE;
+    
+    
+ BEGIN
+/*  This procedure was written to assist people in clearing or setting a record in HDB
+    R_BASE table so that the record would modify the validation column, 
+    trigger an update to this record so that the record would be either be accepted or have 
+    the validation cleared. 
+                          
+    this procedure written by Mark Bogner   October 2009          */
+
+/* added Time zone parameter May 2012 to fix POET BUG for modifying Validation flag from other Time zones  */
+   
+	procedure_indicator := 'SET VALIDATION: ';
+/*  first do error checking  */
+    IF SITE_DATATYPE_ID IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> SITE_DATATYPE_ID' );
+	ELSIF INTERVAL IS NULL THEN DENY_ACTION ( procedure_indicator || 'INVALID <NULL> INTERVAL' );
+	ELSIF START_DATE_TIME IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> START_DATE_TIME' );
+	ELSIF END_DATE_TIME < START_DATE_TIME THEN DENY_ACTION (procedure_indicator || 'INVALID END_DATE_TIME : < START_DATE_TIME' );
+    END IF;
+
+/* validate the interval via a select from the hdb_interval table  */
+    BEGIN
+      select interval_name into temp_chars
+        from hdb_interval
+        where interval_name = interval;
+       exception when others then 
+       DENY_ACTION (procedure_indicator || 'INVALID ' || interval || ' INTERVAL' );
+    END;
+
+/* validate the validation via a select from the hdb_validation table  */
+    BEGIN
+      IF validation_flag is not null THEN
+		select validation into temp_chars
+			from hdb_validation
+			where validation = validation_flag;
+	  END IF;
+	  exception when others then 
+	  DENY_ACTION (procedure_indicator || 'INVALID ' || validation_flag || ' VALIDATION VALUE' );
+    END;
+
+	/* set up the temporary parameters needed for the SQL */
+	p_site_datatype_id := site_datatype_id;
+	p_interval := interval;
+	p_validation := validation_flag;
+    p_start_date_time := START_DATE_TIME;
+ /* modified May 2012 to consider the flags may be modified from users who set the time zone differently  */
+ /*  so rest the dates based on if the interval is instant or hour and if the time zone is different      */
+    p_end_date_time := END_DATE_TIME;
+	IF (p_interval in ('instant','hour')) THEN
+	  p_start_date_time := MOD_DATE_FOR_TIME_ZONE(p_start_date_time, TIME_ZONE);
+   	  p_end_date_time := MOD_DATE_FOR_TIME_ZONE(p_end_date_time, TIME_ZONE);
+	END IF;
+
+/*  if end time was passed in null or used default null then set to start_date_time  */
+	IF P_END_DATE_TIME IS NULL THEN 
+	  P_END_DATE_TIME := p_start_date_time;
+	END IF;
+	   
+/* HDB_UTILITIES to set the manual edit to 'N'  */
+   indicator := hdb_utilities.set_manual_edit('N');
+   
+   /* now touch the rows in r_base so that the validation is update  */
+   update r_base set validation = p_validation,
+    date_time_loaded = to_date('10-DEC-1815') where site_datatype_id = p_site_datatype_id
+    and interval = p_interval and 
+    start_date_time between p_start_date_time and p_end_date_time;
+
+   rows_touched := SQL%ROWCOUNT;
+   /* error out if no rows were update!!!  */
+   IF rows_touched < 1 THEN
+     DENY_ACTION (procedure_indicator || ' SDI:  ' || to_char(site_datatype_id) || ' with ' 
+     || interval || ' INTERVAL and START DATE: ' || to_char(start_date_time) || ' Resulted in no rows updated.');
+   END IF;
+
+/* finally do a commit since this procedure was successful and 
+   a commit will reduce possible deadlock issues  */
+   commit;
+
+END; /*  set_validation procedure  */
+       
+PROCEDURE MODIFY_ACL(
+    P_USER_NAME		VARCHAR2,
+    P_GROUP_NAME	VARCHAR2,
+    P_ACTIVE_FLAG	VARCHAR2 DEFAULT 'Y',
+    P_DELETE_FLAG	VARCHAR2 DEFAULT 'N') IS
+
+    indicator varchar2(1);
+    m_statement varchar2(2000);
+    temp_num number;
+    
+BEGIN
+/*  This procedure was written to be the interface to 
+    HDB from any application that will modify the ACL control list
+    that is controlled by the data within table ref_user_groups
+*/
+
+/*  original development March 2010 by M.  Bogner   */
+/*  modified October 2011 by M. Bogner for ACL II project  */
+
+	/* make sure ACL project is activated  */
+	IF (hdb_utilities.GET_SITE_ACL_ATTR < 0) THEN
+		DENY_ACTION('ILLEGAL ACL DATABASE OPERATION -- ACL projects not enabled');
+	END IF;                          
+	    
+	/* see if ACL PROJECT II is enabled and if user is permitted */
+	IF (hdb_utilities.is_feature_activated(ACL_NAME_II) = 'Y') THEN
+	  begin			   
+	    temp_num := 0;
+		/* see if user account is an active DBA or ACLII ACCOUNT */
+		select count(*) into temp_num  from ref_user_groups 
+		where user_name = user and group_name in ('DBA','DBA ACLII') and active_flag = 'Y';
+		exception when others then temp_num := -1;
+	  end;
+	  	
+	  IF (temp_num < 1) THEN
+		DENY_ACTION('ILLEGAL ACL VERSION II MODIFY_ACL DATABASE OPERATION -- No Permissions');
+	  END IF;
+
+	END IF;
+	    
+/* HDB_UTILITIES to set the manual edit to 'N'  */
+   indicator := hdb_utilities.set_manual_edit('N');
+
+IF (p_delete_flag = 'N') THEN
+/* now its time to put the data into the ref_user_group table, using a merge statement       */
+/* since the record may already be there.  To avoid a messy if then else structure,  */
+/* a dynamic merge statement will be created to do this dml.                           */
+      
+/* create a dynamic merge statement that will merge the values received by this procedure */
+
+   m_statement := 'merge into ref_user_groups rug using ' ||
+	' ( select ''' || p_user_name || ''' USER_NAME, ''' || p_group_name || ''' GROUP_NAME,''' ||
+	  p_active_flag || ''' ACTIVE_FLAG from dual ) rb' ||
+	' on (rug.user_name = rb.user_name and rug.group_name = rb.group_name ) ' ||
+    ' when matched then update ' ||
+    ' set  active_flag = rb.active_flag, last_modified_date = sysdate ' ||
+    ' when not matched then insert ' ||
+    ' (rug.user_name,rug.group_name,rug.active_flag,rug.last_modified_date) ' ||
+    ' values ' ||
+    ' (rb.user_name,rb.group_name,rb.active_flag,sysdate) ';
+
+/* now execute this dynamic sql statement */
+    execute immediate (m_statement);
+ELSE
+	/* then we delete the record based on the input  */
+	Delete from ref_user_groups where user_name = p_user_name and group_name = p_group_name;
+END IF;
+
+/* now commit  */
+commit;
+	  
+END; /*  end of procedure modify_acl  */
+ 
+ 
+PROCEDURE MODIFY_SITE_GROUP_NAME(
+    P_SITE_ID		NUMBER,
+    P_GROUP_NAME	VARCHAR2,
+    P_DELETE_FLAG	VARCHAR2 DEFAULT 'N') IS
+
+    indicator varchar2(1);
+    m_statement varchar2(2000);
+    l_acl_attr_id NUMBER;
+	temp_num NUMBER;
+	    
+BEGIN
+/*  This procedure was written to be the interface to 
+    HDB from any application that will modify a Site's Grouping
+    that is controlled by the data within table ref_site_attr
+*/
+
+/*  original development March 2010 by M.  Bogner   */
+/*  modified October 2011 by M. Bogner for ACL II Project  */
+                          
+/* get the ACL site attribute id  */
+   l_acl_attr_id := hdb_utilities.GET_SITE_ACL_ATTR;
+   IF (l_acl_attr_id < 0) THEN
+	DENY_ACTION('ILLEGAL ACL DATABASE OPERATION -- ACL Projects not enabled');
+   END IF;
+	    
+	/* see if ACL PROJECT II is enabled and if user is permitted */
+	IF (hdb_utilities.is_feature_activated(ACL_NAME_II) = 'Y') THEN
+	  begin			   
+	    temp_num := 0;
+		/* see if user account is an active DBA or ACLII ACCOUNT */
+		select count(*) into temp_num  from ref_user_groups 
+		where user_name = user and group_name in ('DBA','DBA ACLII') and active_flag = 'Y';
+		exception when others then temp_num := -1;
+	  end;
+	  	
+	  IF (temp_num < 1) THEN
+		DENY_ACTION('ILLEGAL ACL VERSION II MODIFY_ACL DATABASE OPERATION -- No Permissions');
+	  END IF;
+
+	END IF;
+
+/* HDB_UTILITIES to set the manual edit to 'N'  */
+   indicator := hdb_utilities.set_manual_edit('N');
+
+IF (p_delete_flag = 'N') THEN
+/* now its time to put the data into the ref_user_group table, using a merge statement       */
+/* since the record may already be there.  To avoid a messy if then else structure,  */
+/* a dynamic merge statement will be created to do this dml.                           */
+      
+/* create a dynamic merge statement that will merge the values received by this procedure */
+
+   m_statement := 'merge into ref_site_attr rsa using ' ||
+	' ( select ' || p_site_id || ' SITE_ID, ''' || p_group_name || ''' GROUP_NAME' ||
+	'    from dual ) rb' ||
+	' on (rsa.site_id = rb.site_id ' || 
+	' and rsa.attr_id = ' || to_char(l_acl_attr_id) || ' ) ' ||
+    ' when matched then update ' ||
+    ' set  string_value = rb.group_name, date_time_loaded = sysdate ' ||
+    ' when not matched then insert ' ||
+    ' (rsa.site_id,rsa.attr_id,rsa.string_value,rsa.effective_start_date_time,rsa.date_time_loaded) ' ||
+    ' values ' ||
+    ' (rb.site_id,' || to_char(l_acl_attr_id) || ',rb.group_name,sysdate,sysdate) ';
+
+/* now execute this dynamic sql statement */
+    execute immediate (m_statement);
+ELSE
+	/* then we delete the record based on the input  */
+	Delete from ref_site_attr where site_id = p_site_id and string_value = p_group_name 
+	  and attr_id = l_acl_attr_id;
+END IF;
+
+/* now commit  */
+commit;
+	  
+END; /*  end of procedure modify_site_group_name  */
+
+
+ PROCEDURE touch_for_re_calculate_algo(
+    SITE_DATATYPE_ID NUMBER,
+    INTERVAL         VARCHAR2,
+    START_TIME DATE,
+    END_TIME    DATE ) IS
+    up_statement varchar2(2000);
+	procedure_indicator varchar2(100);
+    indicator varchar2(1);
+    temp_chars varchar2(30);
+    END_TIME_TEMP DATE;
+    rows_touched NUMBER;
+ BEGIN
+
+	procedure_indicator := 'touch_for_re_calculate_algo FAILED FOR: ';
+/*  first do error checking  */
+    IF SITE_DATATYPE_ID IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> SITE_DATATYPE_ID' );
+	ELSIF INTERVAL IS NULL THEN DENY_ACTION ( procedure_indicator || 'INVALID <NULL> INTERVAL' );
+	ELSIF START_TIME IS NULL THEN DENY_ACTION (procedure_indicator || 'INVALID <NULL> START_TIME' );
+	ELSIF END_TIME < START_TIME THEN DENY_ACTION (procedure_indicator || 'INVALID END_TIME : < START_TIME' );
+    END IF;
+
+
+/*  if end time was passed in null or used default null then set to start_time  */
+	END_TIME_TEMP := END_TIME;
+	IF END_TIME IS NULL THEN
+	  END_TIME_TEMP := START_TIME;
+	END IF;
+
+/* create a dynamic sql statement that will update the records in the r_ interval
+   table  based on the passed in sdi and dates.                                    */
+
+
+   up_statement := 'update r_' || interval || ' set source_id = source_id where site_datatype_id = ' || to_char(site_datatype_id) ||
+   '  and date_time_loaded >= to_date(''' ||
+   to_char(start_time,'dd-MON-YYYY HH24:MI:SS') ||
+   ''',''dd-MON-YYYY HH24:MI:SS'')  and date_time_loaded <= to_date(''' ||
+   to_char(END_TIME,'dd-MON-YYYY HH24:MI:SS') ||
+   ''',''dd-MON-YYYY HH24:MI:SS'')';
+
+/*  insert into update_temp values (up_statement);  */
+commit;
+
+/* HDB_UTILITIES to set the manual edit to 'N'  */
+   indicator := hdb_utilities.set_manual_edit('N');
+
+/* now execute this dynamic sql statement */
+   execute immediate (up_statement);
+   rows_touched := SQL%ROWCOUNT;
+   /* error out if no rows were update!!!  */
+   IF rows_touched < 1 THEN
+     DENY_ACTION (procedure_indicator || ' SDI:  ' || to_char(site_datatype_id) || ' with '
+     || interval || ' INTERVAL and START DATE: ' || to_char(start_time) || ' Resulted in no rows update.');
+   END IF;
+
+/* finally do a commit since this procedure was successful and
+   a commit will reduce possible deadlock issues  */
+   commit;
+
+END; /*  touch_for_re_calculate_algo procedures  */
+
+
+
+
+
+
+   PROCEDURE RE_CALCULATE_ALGORITHM(
+    ALGORITHM_ID NUMBER,
+    INTERVAL         VARCHAR2,
+    START_TIME       DATE,
+    END_TIME       DATE
+    ) IS
+	procedure_indicator varchar2(100);
+	STATUS_TEMP varchar2(100);
+    temp_chars varchar2(30);
+    START_TIME_TEMP DATE;
+    END_TIME_TEMP DATE;
+    total_count NUMBER;
+    good_count NUMBER;
+    bad_count NUMBER;
+    ts_start DATE;
+    TS_END DATE;
+    db_timezone VARCHAR2(3);
+    time_zone VARCHAR2(3);
+
+    /* this is the cursor and the sql to get all sdi's that are input for an output sdi  */
+    CURSOR get_all_input_sdis(ALG_ID_IN NUMBER, INTERVAL_IN VARCHAR2, START_DATE_IN DATE) IS
+	select distinct castv.site_datatype_id, START_DATE_IN + (nvl(ccts2.DELTA_T,0)/86400) "TS_TIME",
+        ccts2.interval
+	from  cp_computation cc, cp_comp_ts_parm ccts, cp_algorithm ca, cp_comp_ts_parm ccts2,
+		  cp_algo_ts_parm catp, cp_active_sdi_tsparm_view castv
+	where
+		 cc.enabled = 'Y'
+	and  cc.loading_application_id is not null
+	and  cc.computation_id = ccts.computation_id
+	and  cc.algorithm_id = ca.algorithm_id
+	and  ca.algorithm_id = catp.algorithm_id
+	and  ca.algorithm_id = ALG_ID_IN
+	and  ccts.algo_role_name = catp.algo_role_name
+	and  catp.parm_type like 'o%'
+	and  ccts.interval = INTERVAL_IN
+	and  ccts.table_selector = 'R_'
+	and  ccts2.computation_id = ccts.computation_id
+	and  castv.site_datatype_id = ccts2.site_datatype_id
+	and  castv.computation_id = cc.computation_id;
+
+/*	and  castv.site_datatype_id = 1536;  /*temp in here for testing  */
+
+ BEGIN
+/*  This procedure was written to assist in "calculating" a record in HDB
+    via the application UC_CP_FIX and may be called separately so that the
+    real interval records that are inputs to a calculation would
+    appear to have been modified and hence, spawn any computations
+    that would result in the passed SDI as output.
+
+    this procedure written by Mark Bogner   November 2008                   */
+
+/*  Modified by M.  Bogner  06/01/2009 to add mods to accept different time_zone parameter */
+
+	procedure_indicator := 'CALCULATE_ALGORITHM FAILED FOR: ';
+/*  first do error checking  */
+    IF ALGORITHM_ID IS NULL THEN
+		DENY_ACTION( procedure_indicator || 'INVALID <NULL> ALGORITHM_ID');
+	ELSIF INTERVAL IS NULL THEN
+		DENY_ACTION( procedure_indicator || 'INVALID <NULL> INTERVAL');
+	ELSIF START_TIME IS NULL THEN
+		DENY_ACTION( procedure_indicator || 'INVALID <NULL> START_TIME');
+    END IF;
+
+/* get the databases default time zone  */
+    BEGIN
+      select param_value into db_timezone
+        from ref_db_parameter, global_name
+        where param_name = 'TIME_ZONE'
+        and global_name.global_name = ref_db_parameter.global_name
+        and nvl(active_flag,'Y') = 'Y';
+       exception when others then
+       db_timezone := NULL;
+    END;
+
+/* validate the interval via a select from the hdb_interval table  */
+    BEGIN
+      select interval_name into temp_chars
+        from hdb_interval
+        where interval_name = interval;
+       exception when others then
+       DENY_ACTION( procedure_indicator || 'INVALID ' || interval || ' INTERVAL');
+    END;
+
+/*  if end time was passed in null or used default null then set to start_time  */
+/*  commented out since we will not support a series of time
+	END_TIME_TEMP := END_TIME;
+	IF END_TIME IS NULL THEN
+	  END_TIME_TEMP := START_TIME;
+	END IF;
+*/
+
+	start_time_temp := START_TIME;
+/* now convert the start_time to the database time if different, both exist,
+   and only for the instantaneous and hourly interval           */
+    IF (TIME_ZONE <> db_timezone AND INTERVAL in ('instant','hour')) THEN
+       start_time_temp:= new_time(start_time_temp,TIME_ZONE,db_timezone);
+    END IF;
+
+	/* now loop through all sdi's that are inputs and "touch" them all */
+	/* not just one SDI since we can't be sure all records for a single sdi
+	   are there for the whole specified time period, without a whole
+	   bunch of processing and checking counts etc...                 */
+	bad_count := 0;
+	good_count := 0;
+	total_count := 0;
+	procedure_indicator := ' FAILED ';
+
+	/* loop through all the input sdis to touch them for a recomputation  */
+	FOR p1 IN get_all_input_sdis(ALGORITHM_ID, INTERVAL, START_TIME_TEMP) LOOP
+		BEGIN
+			total_count := total_count + 1;
+			TS_START := p1.TS_TIME;
+			/* standardize the dates for result sdi based on input sdi start_date_time  */
+			/*hdb_utilities.standardize_dates( SITE_DATATYPE_ID,INTERVAL, TS_START, TS_END); */
+			/* now touch based on standardize dates for input interval in case the intervals don't coincide  */
+/*insert into update_temp values (to_char(p1.SITE_DATATYPE_ID)|| '   ' || p1.INTERVAL);*/
+commit;
+
+			touch_for_re_calculate_algo(p1.SITE_DATATYPE_ID, p1.INTERVAL, START_TIME, END_TIME);
+			good_count := good_count + 1;
+			procedure_indicator := ' SUCCEEDED ';
+			exception when others then
+				/*deny_action(sqlerrm);  */
+				bad_count := bad_count + 1;
+		END;
+
+	END LOOP;
+
+  /* if the good_count is still zero then throw failed exception and how many SDIs were touched */
+    IF (good_count = 0) THEN
+		DENY_ACTION( 'CALCULATE_SERIES Procedure COMPLETED and' || procedure_indicator || ' for: '
+		|| to_char(total_count) || ' Input SDIs with '
+		|| interval || ' INTERVAL and START DATE: ' || to_char(start_time_temp,'dd-mon-yyyy HH24:mi'));
+	END IF;
+
+  END; /*  CALCULATE_SERIES procedure  */
+
+
+END HDB_UTILITIES; 
+.
+/

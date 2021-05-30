@@ -1,0 +1,3 @@
+create sequence ref_site_rating_seq start with 1 nocache order nocycle;
+grant select on ref_site_rating_seq to public;
+

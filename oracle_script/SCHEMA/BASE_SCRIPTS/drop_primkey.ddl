@@ -79,6 +79,9 @@ ALTER TABLE ref_agg_disagg
 ALTER TABLE ref_app_data_source      
       DROP CONSTRAINT ref_app_data_source_pk
 ; 
+ALTER TABLE ref_db_generic_list
+      DROP CONSTRAINT ref_db_generic_list_pk
+;
 ALTER TABLE ref_db_list   
       DROP CONSTRAINT ref_db_list_pk
 ;
@@ -94,6 +97,13 @@ ALTER TABLE ref_div
 ALTER TABLE ref_dmi_data_map    
       DROP CONSTRAINT ref_dmi_data_map_pk
 ;
+ALTER TABLE REF_ENSEMBLE  drop constraint REF_ENSEMBLE_PK;
+ALTER TABLE REF_ENSEMBLE drop constraint REF_ENSEMBLE_AGEN_ID_FK; 
+ALTER TABLE REF_ENSEMBLE_KEYVAL drop constraint REF_ENSEMBLE_KEYVAL_PK;
+ALTER TABLE REF_ENSEMBLE_KEYVAL drop constraint ENSEMBLE_KEY_ENSEMBLE_ID_FK;
+ALTER TABLE REF_ENSEMBLE_TRACE  drop constraint REF_ENSEMBLE_TRACE_PK; 
+ALTER TABLE REF_ENSEMBLE_TRACE drop constraint ensemble_tr_ensemble_id_fk; 
+ALTER TABLE REF_ENSEMBLE_TRACE drop constraint ensemble_model_run_id_fk; 
 ALTER TABLE ref_hm_filetype         
       DROP CONSTRAINT ref_hm_filetype_pk
 ;    
@@ -212,6 +222,19 @@ ALTER TABLE hdb_model
 ALTER TABLE hdb_objecttype        
       DROP CONSTRAINT hdb_objecttype_pk
 ;
+
+ALTER TABLE hdb_rating_algorithm        
+      DROP CONSTRAINT hdb_rating_algoritm_pk;
+
+ALTER TABLE hdb_rating_type       
+      DROP CONSTRAINT hdb_rating_type_pk;
+
+ALTER TABLE ref_rating        
+      DROP CONSTRAINT ref_rating_pk;
+
+ALTER TABLE ref_site_rating        
+      DROP CONSTRAINT ref_site_rating_pk;
+
 ALTER TABLE hdb_river 
       DROP CONSTRAINT hdb_river_pk
 ;

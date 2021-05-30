@@ -1,0 +1,684 @@
+CREATE OR REPLACE PACKAGE BODY RATINGS 
+AS
+
+  PROCEDURE create_site_rating(indep_site_datatype_id IN NUMBER,
+  rating_type_common_name IN VARCHAR2,
+  effective_start_date_time IN DATE,
+  effective_end_date_time IN DATE,
+  agen_id IN NUMBER,
+  description IN VARCHAR2)
+  AS
+  BEGIN
+
+    IF(indep_site_datatype_id IS NULL) THEN
+      deny_action('Invalid <NULL> indep_site_datatype_id');
+    ELSIF(rating_type_common_name IS NULL) THEN
+      deny_action('Invalid <NULL> rating_type_common_name');
+    ELSIF(agen_id IS NULL) THEN
+      deny_action('Invalid <NULL> agen_id');
+    END IF;
+
+    INSERT
+    INTO ref_site_rating(rating_id, indep_site_datatype_id,
+      rating_type_common_name, effective_start_date_time,
+      effective_end_date_time, date_time_loaded,
+      agen_id, description)
+    VALUES(NULL, indep_site_datatype_id,
+      rating_type_common_name, effective_start_date_time,
+      effective_end_date_time, sysdate,
+      agen_id, description);
+
+  END create_site_rating;
+
+
+  PROCEDURE delete_rating_points(rating_in NUMBER)
+  AS
+  v_count NUMBER;
+  BEGIN
+
+    IF(rating_in IS NULL) THEN
+      deny_action('Invalid <NULL> rating_id');
+    END IF;
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM ref_site_rating
+    WHERE rating_id = rating_in;
+
+    IF v_count = 0 THEN
+      deny_action('Invalid non-existing rating_id ' ||
+      rating_in || ' attempted for deletion of table');
+    END IF;
+
+    DELETE FROM ref_rating
+    WHERE rating_id = rating_in;
+
+  END delete_rating_points;
+
+  PROCEDURE do_rating(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  indep_date IN DATE,
+  indep_base OUT NUMBER,
+  dep_value OUT NUMBER,
+  match_check OUT nocopy VARCHAR2)
+  AS
+  algorithm hdb_rating_type.rating_algorithm%TYPE;
+  sqlstmt VARCHAR2(100);
+  BEGIN
+
+    IF(rating_in IS NULL) THEN
+      deny_action('Invalid <NULL> rating_id');
+    END IF;
+
+    IF(indep_value IS NULL) THEN
+      deny_action('Invalid <NULL> independent value');
+    END IF;
+
+    BEGIN
+      SELECT procedure_name
+      INTO algorithm
+      FROM hdb_rating_algorithm a,
+        hdb_rating_type b,
+        ref_site_rating c
+      WHERE a.rating_algorithm = b.rating_algorithm
+       AND b.rating_type_common_name = c.rating_type_common_name
+       AND c.rating_id = rating_in;
+
+    EXCEPTION
+    WHEN others THEN
+      deny_action('Unable to find algorithm for rating ' || rating_in);
+    END;
+
+    /* native dynamic SQL call to the procedure named in the hdb_rating_algorithm table */
+    sqlstmt := 'begin ratings.' || algorithm || '(:2, :3, :4, :5, :6, :7); end;';
+
+    EXECUTE IMMEDIATE(sqlstmt) USING IN rating_in,
+      IN indep_value,
+      IN indep_date,
+      OUT indep_base,
+      OUT dep_value,
+      OUT match_check;
+
+  END do_rating;
+
+  PROCEDURE find_rating_limits(rating_in IN NUMBER,
+  min_value OUT NUMBER,
+  max_value OUT NUMBER)
+  AS
+  v_count NUMBER;
+  BEGIN
+    SELECT COUNT(*),
+      MIN(independent_value),
+      MAX(independent_value)
+    INTO v_count,
+      min_value,
+      max_value
+    FROM ref_rating
+    WHERE rating_id = rating_in;
+
+    IF(v_count = 0) THEN
+      deny_action('Rating_id ' ||
+      rating_in || ' does not have any rows in rating table');
+    END IF;
+
+  END find_rating_limits;
+
+  PROCEDURE find_rating_points(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  x1 OUT NUMBER,
+  x2 OUT NUMBER,
+  y1 OUT NUMBER,
+  y2 OUT NUMBER,
+  match_check OUT nocopy VARCHAR2)
+  AS
+  v_count NUMBER;
+  min_value NUMBER;
+  max_value NUMBER;
+  x_search_above NUMBER;
+  x_search_below NUMBER;
+  BEGIN
+
+    /* check input */
+
+    IF(rating_in IS NULL) THEN
+      deny_action('Invalid <NULL> rating_id');
+    END IF;
+
+    IF(indep_value IS NULL) THEN
+      deny_action('Invalid <NULL> independent value');
+    END IF;
+
+    /* search points */
+    x_search_above := indep_value;
+    x_search_below := indep_value;
+
+    /* check for exact match */
+    SELECT COUNT(*)
+    INTO v_count
+    FROM ref_rating
+    WHERE rating_id = rating_in
+     AND independent_value = indep_value;
+
+    IF(v_count > 0) THEN
+
+      /*exact, return two copies of same data */
+      match_check := 'E';
+      x1 := indep_value;
+      x2 := indep_value;
+
+      SELECT dependent_value,
+        dependent_value
+      INTO y1,
+        y2
+      FROM ref_rating
+      WHERE rating_id = rating_in
+       AND independent_value = indep_value;
+
+      RETURN;
+      -- unreachable?
+    END IF;
+
+    /* non exact, find outer limits of table */
+    find_rating_limits(rating_in, min_value, max_value);
+
+    IF(indep_value < max_value) THEN  /* must search for x2 */
+      IF(indep_value < min_value) THEN
+
+        /* x1 is min_value, search above for x2 */
+        match_check := 'B';
+        x1 := min_value;
+        x_search_above := min_value;
+      END IF;
+
+      SELECT MIN(independent_value)
+      INTO x2
+      FROM ref_rating
+      WHERE rating_id = rating_in
+       AND independent_value > x_search_above;
+    END IF;
+
+    IF(indep_value > min_value) THEN /* must search for x1 */
+      IF(indep_value > max_value) THEN
+
+        /* x2 is max value, search below for x1 */
+        match_check := 'A';
+        x2 := max_value;
+        x_search_below := max_value;
+      END IF;
+
+      SELECT MAX(independent_value)
+      INTO x1
+      FROM ref_rating
+      WHERE rating_id = rating_in
+       AND independent_value < x_search_below;
+    END IF;
+
+    /* get y values for resulting x */
+    SELECT dependent_value
+    INTO y1
+    FROM ref_rating
+    WHERE rating_id = rating_in
+     AND independent_value = x1;
+
+    SELECT dependent_value
+    INTO y2
+    FROM ref_rating
+    WHERE rating_id = rating_in
+     AND independent_value = x2;
+
+  END find_rating_points;
+
+  FUNCTION find_site_rating(rating_type IN VARCHAR2,
+  indep_sdi IN NUMBER,
+  value_date_time IN DATE)
+  RETURN ref_site_rating.rating_id%TYPE
+  AS
+  rating ref_site_rating.rating_id%TYPE;
+  duprating ref_site_rating.rating_id%TYPE;
+  v_count NUMBER;
+
+  CURSOR c1 IS
+  SELECT rating_id
+  INTO rating
+  FROM ref_site_rating
+  WHERE indep_site_datatype_id = indep_sdi
+   AND rating_type_common_name = rating_type
+   AND((effective_start_date_time IS NULL
+        AND effective_end_date_time IS NULL)
+      OR (value_date_time >= effective_start_date_time
+          AND effective_end_date_time IS NULL)
+      OR (value_date_time <= effective_end_date_time
+          AND effective_start_date_time IS NULL)
+      OR (value_date_time >= effective_start_date_time
+          AND value_date_time < effective_end_date_time));
+
+  BEGIN
+
+  /*procedure from O'Reilly PL/SQL programming
+  determine if more than one rating matches
+  if so, we have a problem
+  */
+
+    OPEN c1;
+    FETCH c1
+    INTO rating;
+
+    IF c1 % NOTFOUND THEN
+      CLOSE c1;
+      RETURN NULL;
+
+      /*no rating at all matched*/
+    ELSE
+      FETCH c1
+      INTO duprating;
+
+      IF c1 % NOTFOUND THEN
+        CLOSE c1;
+        RETURN rating;
+      ELSE
+        /* more than one match!*/
+        CLOSE c1;
+        deny_action('More than one rating matched input!');
+        RETURN NULL;
+      END IF;
+    END IF;
+
+  END find_site_rating;
+
+  PROCEDURE modify_rating_point(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  dep_value IN NUMBER)
+  AS
+  v_count NUMBER;
+  BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM ref_rating
+    WHERE rating_id = rating_in
+     AND independent_value = indep_value;
+
+    IF v_count = 0 THEN
+      INSERT
+      INTO ref_rating(rating_id, independent_value, dependent_value)
+      VALUES(rating_in, indep_value, dep_value);
+    ELSE
+      UPDATE ref_rating
+      SET dependent_value = dep_value
+      WHERE rating_id = rating_in
+       AND independent_value = indep_value;
+    END IF;
+
+  END modify_rating_point;
+
+  PROCEDURE rating_linear(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  indep_date IN DATE,
+  indep_base OUT NUMBER,
+  dep_value OUT NUMBER,
+  match_check OUT nocopy VARCHAR2)
+  AS
+  x1 NUMBER;
+  x2 NUMBER;
+  y1 NUMBER;
+  y2 NUMBER;
+  BEGIN
+
+    IF(rating_in IS NULL) THEN
+      deny_action('Invalid <NULL> rating_id');
+    END IF;
+
+    BEGIN
+      find_rating_points(rating_in,
+        indep_value, x1, x2, y1, y2, match_check);
+
+      indep_base := x1;
+
+      IF(match_check = 'E') THEN
+        dep_value := y1;
+      ELSE
+        dep_value := y1 + (y2 -y1)/(x2 -x1)*(indep_value -x1);
+      END IF;
+
+    EXCEPTION
+    WHEN others THEN
+      deny_action('Unable to complete linear rating for rating ' ||
+        rating_in || ' value ' || indep_value);
+    END;
+
+  END rating_linear;
+
+  PROCEDURE rating_logarithm(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  indep_date IN DATE,
+  indep_base OUT NUMBER,
+  dep_value OUT NUMBER,
+  match_check OUT nocopy VARCHAR2)
+  AS
+  x1 NUMBER;
+  x2 NUMBER;
+  y1 NUMBER;
+  y2 NUMBER;
+  dy NUMBER;
+  dx NUMBER;
+  x NUMBER;
+  BEGIN
+
+    IF(rating_in IS NULL) THEN
+      deny_action('Invalid <NULL> rating_id');
+    END IF;
+
+    BEGIN
+   
+  -- This first outer IF statement added by Ismail Ozdemir on 08/20/2010
+  -- to check if the shiftedGH <=0 , the flow is 0.  
+  -- Another if statement to check unshifted GH=0 then flow=0 is 
+  -- added in uc_algorithms.jar file
+  
+ IF(indep_value <= 0) THEN
+ dep_value :=0;
+ ELSE
+      find_rating_points(rating_in,
+      indep_value, x1, x2, y1, y2, match_check);
+
+      indep_base := x1;
+      
+      IF (y1 = 0 OR y2 = 0 or x1 = 0 or x2 = 0 OR indep_value = 0) THEN
+        deny_action('Unable to complete logarithmic rating for rating ' ||
+      rating_in || ', rating points = 0 are not usable in logarithmic rating, value ' || indep_value);
+      END IF;
+
+      IF(match_check = 'E') THEN
+        dep_value := y1;
+      ELSE
+        y1 := LOG(10,   y1);
+        y2 := LOG(10,   y2);
+        x1 := LOG(10,   x1);
+        x2 := LOG(10,   x2);
+        x := LOG(10,   indep_value);
+        dy :=(y2 -y1);
+        dx :=(x2 -x1);
+
+        dep_value := POWER(10,   y1 + dy / dx *(x -x1));
+      END IF;
+ END IF;
+    
+    EXCEPTION
+    WHEN others THEN
+      deny_action('Unable to complete logarithmic rating for rating ' ||
+      rating_in || ' value ' || indep_value);
+    END;
+
+  END rating_logarithm;
+
+  PROCEDURE rating_lookup(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  indep_date IN DATE,
+  indep_base OUT NUMBER,
+  dep_value OUT NUMBER,
+  match_check OUT nocopy VARCHAR2)
+  AS
+  BEGIN
+
+    IF(rating_in IS NULL) THEN
+      deny_action('Invalid <NULL> rating_id');
+    END IF;
+
+    BEGIN
+      SELECT independent_value,
+        dependent_value
+      INTO indep_base,
+        dep_value
+      FROM ref_rating
+      WHERE rating_id = rating_in
+       AND independent_value =
+        (SELECT MAX(independent_value)
+         FROM ref_rating
+         WHERE rating_id = rating_in
+         AND independent_value <= indep_value);
+
+    EXCEPTION
+    WHEN no_data_found THEN
+      match_check := 'B';
+    WHEN others THEN
+      deny_action('Unable to complete lookup rating for rating ' ||
+      rating_in || ' value ' || indep_value);
+    END;
+
+  END rating_lookup;
+
+  PROCEDURE rating_semilogx(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  indep_date IN DATE,
+  indep_base OUT NUMBER,
+  dep_value OUT NUMBER,
+  match_check OUT nocopy VARCHAR2)
+  AS
+  x1 NUMBER;
+  x2 NUMBER;
+  y1 NUMBER;
+  y2 NUMBER;
+  dy NUMBER;
+  dx NUMBER;
+  x NUMBER;
+  BEGIN
+
+    IF(rating_in IS NULL) THEN
+      deny_action('Invalid <NULL> rating_id');
+    END IF;
+
+    BEGIN
+      find_rating_points(rating_in,
+      indep_value, x1, x2, y1, y2, match_check);
+
+      IF (x1 = 0 or x2 = 0 or indep_value = 0) THEN
+        deny_action('Unable to complete logarithmic rating for rating ' ||
+      rating_in || ', rating points = 0 are not usable in logarithmic rating, value ' || indep_value);
+      END IF;
+      
+      indep_base := x1;
+
+      IF(match_check = 'E') THEN
+        dep_value := y1;
+      ELSE
+        x1 := LOG(10,   x1);
+        x2 := LOG(10,   x2);
+        x := LOG(10,   indep_value);
+        dy :=(y2 -y1);
+        dx :=(x2 -x1);
+
+        dep_value := y1 + dy / dx *(x -x1);
+      END IF;
+
+    EXCEPTION
+    WHEN others THEN
+
+      deny_action('Unable to complete logarithmic rating for rating ' ||
+      rating_in || ' value ' || indep_value);
+    END;
+
+  END rating_semilogx;
+
+  PROCEDURE rating_time_interp_lookup(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  indep_date IN DATE,
+  indep_base out NUMBER,
+  dep_value OUT NUMBER,
+  match_check OUT nocopy VARCHAR2)
+  AS
+/** Function to do a time interpolated rating. The algorithm:
+   Do a lookup rating with this rating table.
+   See if a rating exists for the time period after this rating id.
+   If it does exist, then perform a lookup rating with that table.
+   Interpolate between the two results in time, and return that value
+  */
+  sdi ref_site_rating.indep_site_datatype_id%type;
+  rating ref_site_rating.rating_type_common_name%type;
+  sdate ref_site_rating.effective_start_date_time%type;
+  edate ref_site_rating.effective_end_date_time%type;
+  after_rating ref_site_rating.rating_id%type;
+  after_dep_value NUMBER;
+  x1 date;
+  x2 date;
+  y1 NUMBER;
+  y2 NUMBER;
+  BEGIN
+
+    rating_lookup(rating_in,indep_value,indep_date,indep_base,dep_value,match_check);
+
+    /*find information about this rating */
+    select indep_site_datatype_id, rating_type_common_name,
+      effective_start_date_time,effective_end_date_time
+    into sdi, rating, sdate, edate
+    from ref_site_rating
+    where rating_id = rating_in;
+
+    if indep_date <sdate or indep_date >= edate then
+      deny_action ('Date for time interpolated rating is not within effective range
+        for rating id '|| rating_in);
+    end if;
+
+    /* find rating id for values after we end (our end date or later) */
+    select find_site_rating(rating,sdi,edate)
+    into after_rating
+    from dual;
+
+    if after_rating is not null and after_rating != rating_in then
+    /* sanity check, after rating id must have a effective_start_date_time
+      equal to our end time */
+      begin
+        select rating_id
+        into after_rating
+        from ref_site_rating where
+        rating_id = after_rating and
+        effective_start_date_time = edate;
+        exception when no_data_found then
+          deny_action('Rating '|| after_rating ||' does not have expected start_time, cannot complete time interpolation!');
+      end;
+
+      /* do a rating in the rating table after us */
+      rating_lookup(after_rating,indep_value,indep_date,indep_base,after_dep_value,match_check);
+
+      /* now interpolate */
+      y1:=dep_value;
+      y2:=after_dep_value;
+      x1:=sdate;
+      x2:=edate;
+
+      IF (indep_date = sdate) THEN
+        dep_value := y1;
+      ELSE
+        dep_value := y1 + (y2 -y1)/(x2 -x1)*(indep_date -x1);
+      END IF;
+    /* else no rating found after us, we just use the first result. */
+    end if;
+
+  END rating_time_interp_lookup;
+
+  PROCEDURE rating_time_interp_linear(rating_in IN NUMBER,
+  indep_value IN NUMBER,
+  indep_date IN DATE,
+  indep_base out NUMBER,
+  dep_value OUT NUMBER,
+  match_check OUT nocopy VARCHAR2)
+  AS
+/** Function to do a time interpolated rating. The algorithm:
+   Do a linear rating with this table.
+   See if a rating exists for the time period after this rating id.
+   If it does exist, then perform a linear rating with that table.
+   Interpolate between the two results in time, and return that value
+  */
+  sdi ref_site_rating.indep_site_datatype_id%type;
+  rating ref_site_rating.rating_type_common_name%type;
+  sdate ref_site_rating.effective_start_date_time%type;
+  edate ref_site_rating.effective_end_date_time%type;
+  after_rating ref_site_rating.rating_id%type;
+  after_dep_value NUMBER;
+  x1 date;
+  x2 date;
+  y1 NUMBER;
+  y2 NUMBER;
+  BEGIN
+
+    rating_linear(rating_in,indep_value,indep_date,indep_base,dep_value,match_check);
+
+    /*find information about this rating */
+    select indep_site_datatype_id, rating_type_common_name,
+      effective_start_date_time,effective_end_date_time
+    into sdi, rating, sdate, edate
+    from ref_site_rating
+    where rating_id = rating_in;
+
+    if indep_date <sdate or indep_date >= edate then
+      deny_action ('Date for time interpolated rating is not within effective range
+        for rating id '|| rating_in);
+    end if;
+
+    /* find rating id for values after we end (our end date or later) */
+    select find_site_rating(rating,sdi,edate)
+    into after_rating
+    from dual;
+
+    /* see if there is an after rating, and it is a different table than first */
+    if after_rating is not null and after_rating != rating_in then
+    /* sanity check, after rating id must have a effective_start_date_time
+      equal to our end time */
+      begin
+        select rating_id
+        into after_rating
+        from ref_site_rating where
+        rating_id = after_rating and
+        effective_start_date_time = edate;
+        exception when no_data_found then
+          deny_action('Rating '|| after_rating ||' does not have expected start_time, cannot complete time interpolation!');
+      end;
+
+      /* do a rating in the rating table after us */
+      rating_linear(after_rating,indep_value,indep_date,indep_base,after_dep_value,match_check);
+
+      /* now interpolate */
+      y1:=dep_value;
+      y2:=after_dep_value;
+      x1:=sdate;
+      x2:=edate;
+
+      IF (indep_date = sdate) THEN
+        dep_value := y1;
+      ELSE
+        dep_value := y1 + (y2 -y1)/(x2 -x1)*(indep_date -x1);
+      END IF;
+    /* else no rating found after us, we just use the first result. */
+    end if;
+
+  END rating_time_interp_linear;
+
+
+  PROCEDURE update_rating_desc(rating_in IN NUMBER,
+  description_in IN VARCHAR2)
+  AS
+  v_count NUMBER;
+  BEGIN
+
+    IF(rating_in IS NULL) THEN
+      deny_action('Invalid <NULL> rating_id');
+    END IF;
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM ref_site_rating
+    WHERE rating_id = rating_in;
+
+    IF v_count = 0 THEN
+      deny_action('Invalid non-existing rating_id ' ||
+      rating_in || ' attempted for description update');
+    END IF;
+
+    UPDATE ref_site_rating
+    SET description = description_in
+    WHERE rating_id = rating_in;
+
+  END update_rating_desc;
+
+END ratings;
+
+.
+/

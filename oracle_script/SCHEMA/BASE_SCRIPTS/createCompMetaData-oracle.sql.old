@@ -1,0 +1,582 @@
+
+
+---------------------------------------------------------------------------
+-- This file defines the computation meta-data classes for Oracle
+---------------------------------------------------------------------------
+
+set echo on
+set feedback on
+spool hdb_cp_objects.out
+
+---------------------------------------------------------------------------
+--  First create a role that will define the privileges to the calculation tables
+---------------------------------------------------------------------------
+-- taken out of this scripts since the roles have already been created including this one
+-- create role calc_definition_role;
+--
+
+---------------------------------------------------------------------------
+-- This table is populated by the DB trigger code to start computations
+---------------------------------------------------------------------------
+CREATE TABLE CP_COMP_TASKLIST
+(
+	RECORD_NUM NUMBER NOT NULL,
+	LOADING_APPLICATION_ID NUMBER NOT NULL,
+	SITE_DATATYPE_ID NUMBER NOT NULL,
+	INTERVAL VARCHAR2(24) NOT NULL,
+	TABLE_SELECTOR VARCHAR2(24),               -- not req'd by some DBs
+	VALUE FLOAT,                               -- not req'd for deleted data
+	DATE_TIME_LOADED DATE NOT NULL,
+	START_DATE_TIME DATE NOT NULL,
+	DELETE_FLAG VARCHAR2(1) DEFAULT 'N',
+	MODEL_RUN_ID NUMBER DEFAULT NULL,           -- will be null for real data
+        VALIDATION  CHAR(1),
+        DATA_FLAGS  VARCHAR2(20)
+)
+tablespace HDB_data
+;
+---------------------------------------------------------------------------
+-- The sequence generator for this table
+---------------------------------------------------------------------------
+create sequence cp_tasklist_sequence  minvalue 1 start with 1 maxvalue 1000000000;
+create public synonym cp_tasklist_sequence for cp_tasklist_sequence;
+grant select on cp_tasklist_sequence to app_role;
+grant select on cp_tasklist_sequence to savoir_faire;
+
+---------------------------------------------------------------------------
+-- the privileges for table cp_tasklist
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_comp_tasklist for cp_comp_tasklist;
+grant select on cp_comp_tasklist to public;
+grant select,insert,update,delete on cp_comp_tasklist to app_role;
+grant select,insert,update,delete on cp_comp_tasklist to savoir_faire;
+
+---------------------------------------------------------------------------
+-- The HDB_LOADING_APPLICATION table should already exist in HDB
+---------------------------------------------------------------------------
+-- See "tbl.ddl"
+
+---------------------------------------------------------------------------
+-- This table ensures that only one instance of a comp proc runs at a time
+---------------------------------------------------------------------------
+CREATE TABLE CP_COMP_PROC_LOCK
+(
+	LOADING_APPLICATION_ID NUMBER NOT NULL,
+	PID NUMBER NOT NULL,
+	HOST VARCHAR2(400) NOT NULL,
+	HEARTBEAT DATE NOT NULL,
+	CUR_STATUS VARCHAR2(64) 
+)
+tablespace HDB_data
+;
+--  removed index to create primary key constraint instead
+--CREATE UNIQUE INDEX CP_COMP_PROC_LOCK_IDX 
+--	ON CP_COMP_PROC_LOCK(LOADING_APPLICATION_ID) tablespace HDB_idx;
+
+-- primary key for table cp_comp_proc_lock
+alter table cp_comp_proc_lock  add constraint cpcpl_loading_appl_id_pk 
+primary key (loading_application_id) 
+using index tablespace hdb_idx;
+
+--  foreign key loading_application_id
+alter table cp_comp_proc_lock add constraint cpcpl_loading_appl_id_fk 
+foreign key (loading_application_id) 
+references hdb_loading_application (loading_application_id);
+
+---------------------------------------------------------------------------
+-- the privileges for table cp_comp_proc_lock
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_comp_proc_lock for cp_comp_proc_lock;
+grant select on cp_comp_proc_lock to public;
+grant select,insert,update,delete on cp_comp_proc_lock to app_role;
+grant select,insert,update,delete on cp_comp_proc_lock to savoir_faire;
+
+---------------------------------------------------------------------------
+-- This table represents an algorithm.
+---------------------------------------------------------------------------
+CREATE TABLE CP_ALGORITHM
+(
+	ALGORITHM_ID NUMBER NOT NULL,
+	ALGORITHM_NAME VARCHAR2(64),
+	EXEC_CLASS VARCHAR2(160),
+	CMMNT VARCHAR2(1000)
+)
+tablespace HDB_data;
+---------------------------------------------------------------------------
+-- The sequence generator for this table
+---------------------------------------------------------------------------
+create sequence cp_algorithmidseq start with 50 nocache;
+create public synonym cp_algorithmidseq for cp_algorithmidseq;
+grant select on cp_algorithmidseq to calc_definition_role;
+grant select on cp_algorithmidseq to savoir_faire;
+
+-- removed to create a primary key constraint instead
+--CREATE UNIQUE INDEX CP_COMP_PROC_LOCK_PKIDX
+--	ON CP_ALGORITHM(ALGORITHM_ID) tablespace HDB_idx;
+
+--  primary key algorithm_id for table cp_algorithm
+alter table cp_algorithm  add constraint cpa_algorithm_id_pk 
+primary key (algorithm_id) 
+using index tablespace hdb_idx;
+
+
+CREATE UNIQUE INDEX CP_COMP_PROC_LOCK_SKIDX
+	ON CP_ALGORITHM(ALGORITHM_NAME) tablespace HDB_idx;
+
+---------------------------------------------------------------------------
+-- the privileges for table cp_algorithm
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_algorithm for cp_algorithm;
+grant select on cp_algorithm to public;
+grant select,insert,update,delete on cp_algorithm to calc_definition_role;
+grant select,insert,update,delete on cp_algorithm to savoir_faire;
+
+---------------------------------------------------------------------------
+-- This table represents archive of the algorithm table.
+---------------------------------------------------------------------------
+CREATE TABLE CP_ALGORITHM_ARCHIVE
+(
+	ALGORITHM_ID NUMBER NOT NULL,
+	ALGORITHM_NAME VARCHAR2(64),
+	EXEC_CLASS VARCHAR2(160),
+	CMMNT VARCHAR2(1000),
+        ARCHIVE_REASON VARCHAR2(10) NOT NULL,
+        DATE_TIME_ARCHIVED DATE     NOT NULL,
+        ARCHIVE_CMMNT VARCHAR2(1000)
+)
+tablespace HDB_data
+;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_algorithm_archive
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_algorithm_archive for cp_algorithm_archive;
+grant select on cp_algorithm_archive to public;
+
+---------------------------------------------------------------------------
+-- This table stores info about time-series params for an algorithm.
+---------------------------------------------------------------------------
+CREATE TABLE CP_ALGO_TS_PARM
+(
+	ALGORITHM_ID NUMBER NOT NULL,
+	ALGO_ROLE_NAME VARCHAR2(24) NOT NULL,
+	PARM_TYPE VARCHAR2(24) NOT NULL
+)
+tablespace HDB_data
+;
+
+-- removed to create primary key constraint
+--CREATE UNIQUE INDEX CP_ALGO_TS_PARM_PKIDX
+--	ON CP_ALGO_TS_PARM(ALGORITHM_ID, ALGO_ROLE_NAME) tablespace HDB_idx;
+
+-- primary key for table cp_algo_ts_parm
+alter table cp_algo_ts_parm  add constraint cpatp_algo_ts_parm_pk 
+primary key (algorithm_id, algo_role_name) 
+using index tablespace hdb_idx;
+
+--  foreign key algorithm_id for table cp_algo_ts_parm
+alter table cp_algo_ts_parm add constraint cpatp_algorithm_id_fk 
+foreign key (algorithm_id) 
+references cp_algorithm (algorithm_id) on delete cascade;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_algo_ts_parm
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_algo_ts_parm for cp_algo_ts_parm;
+grant select on cp_algo_ts_parm to public;
+grant select,insert,update,delete on cp_algo_ts_parm to calc_definition_role;
+grant select,insert,update,delete on cp_algo_ts_parm to savoir_faire;
+
+---------------------------------------------------------------------------
+-- This table represents archive of the time-series params table.
+---------------------------------------------------------------------------
+CREATE TABLE CP_ALGO_TS_PARM_ARCHIVE
+(
+	ALGORITHM_ID NUMBER NOT NULL,
+	ALGO_ROLE_NAME VARCHAR2(24) NOT NULL,
+	PARM_TYPE VARCHAR2(24) NOT NULL,
+        ARCHIVE_REASON VARCHAR2(10) NOT NULL,
+        DATE_TIME_ARCHIVED DATE     NOT NULL,
+        ARCHIVE_CMMNT VARCHAR2(1000)
+)
+tablespace HDB_data
+;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_algo_ts_parm_archive
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_algo_ts_parm_archive for cp_algo_ts_parm_archive;
+grant select on cp_algo_ts_parm_archive to public;
+
+---------------------------------------------------------------------------
+-- This table stores additional named properties that apply to an algorithm.
+---------------------------------------------------------------------------
+CREATE TABLE CP_ALGO_PROPERTY
+(
+	ALGORITHM_ID NUMBER NOT NULL,
+	PROP_NAME VARCHAR2(24) NOT NULL,
+	PROP_VALUE VARCHAR2(240) NOT NULL
+)
+tablespace HDB_data
+;
+
+-- removed to create primary key constraint
+-- CREATE UNIQUE INDEX CP_ALGO_PROPERTY_PKIDX
+--	ON CP_ALGO_PROPERTY(ALGORITHM_ID, PROP_NAME) tablespace HDB_idx;
+
+-- primary key for table cp_algo_property
+alter table cp_algo_property  add constraint cpap_algo_property_pk 
+primary key (algorithm_id, prop_name) 
+using index tablespace hdb_idx;
+
+-- foreign key for table cp_algo_property for algorithm_id of table cp_algorithm
+alter table cp_algo_property add constraint cp_ap_algorithm_id_fk 
+foreign key (algorithm_id) 
+references cp_algorithm (algorithm_id) on delete cascade;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_algo_property
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_algo_property for cp_algo_property;
+grant select on cp_algo_property to public;
+grant select,insert,update,delete on cp_algo_property to calc_definition_role;
+grant select,insert,update,delete on cp_algo_property to savoir_faire;
+
+---------------------------------------------------------------------------
+-- This table represents archive of the algo-property table.
+---------------------------------------------------------------------------
+CREATE TABLE CP_ALGO_PROPERTY_ARCHIVE
+(
+	ALGORITHM_ID NUMBER NOT NULL,
+	PROP_NAME VARCHAR2(24) NOT NULL,
+	PROP_VALUE VARCHAR2(240) NOT NULL,
+        ARCHIVE_REASON VARCHAR2(10) NOT NULL,
+        DATE_TIME_ARCHIVED DATE     NOT NULL,
+        ARCHIVE_CMMNT VARCHAR2(1000)
+)
+tablespace HDB_data
+;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_algo_property_archive
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_algo_property_archive for cp_algo_property_archive;
+grant select on cp_algo_property_archive to public;
+
+---------------------------------------------------------------------------
+-- This table represents a computation.
+---------------------------------------------------------------------------
+CREATE TABLE CP_COMPUTATION
+(
+	COMPUTATION_ID NUMBER NOT NULL,
+	COMPUTATION_NAME VARCHAR2(64) NOT NULL,
+	ALGORITHM_ID NUMBER,                -- Must be assigned to execute.
+	CMMNT VARCHAR2(1000),
+	LOADING_APPLICATION_ID NUMBER,      -- App to execute this comp.
+	                                     -- (null means not currently assigned)
+	DATE_TIME_LOADED DATE NOT NULL,
+	ENABLED VARCHAR2(1) DEFAULT 'N',
+	EFFECTIVE_START_DATE_TIME DATE NULL,
+	EFFECTIVE_END_DATE_TIME DATE NULL
+)
+tablespace HDB_data
+;
+---------------------------------------------------------------------------
+-- The sequence generator for this table, not made public for a reason
+---------------------------------------------------------------------------
+create sequence cp_computationidseq start with 100 nocache;
+create public synonym cp_computationidseq for cp_computationidseq;
+grant select on cp_computationidseq to calc_definition_role;
+grant select on cp_computationidseq to savoir_faire;
+
+
+--  removed to create primary key constraint instead
+-- CREATE UNIQUE INDEX CP_COMPUTATION_PKIDX
+-- 	ON CP_COMPUTATION(COMPUTATION_ID) tablespace HDB_idx;
+
+--  primary key for table cp_computation
+alter table cp_computation  add constraint cpc_computation_id_pk 
+primary key (computation_id) 
+using index tablespace hdb_idx;
+
+CREATE UNIQUE INDEX CP_COMPUTATION_SKIDX
+	ON CP_COMPUTATION(COMPUTATION_NAME) tablespace HDB_idx;
+
+--  check constraint to insure enable only Y or N
+alter table cp_computation add constraint check_enabled_YorN 
+check (enabled in ('Y','N'));
+
+-- foreign key for table cp_computation of algorithm_id from table cp_algorithm
+alter table cp_computation add constraint cpc_algorithm_id_fk 
+foreign key (algorithm_id) 
+references cp_algorithm (algorithm_id);
+
+-- foreign key for table cp_computation of loading_application_id from table hdb_loading_application
+alter table cp_computation add constraint cpc_loading_application_id_fk 
+foreign key (loading_application_id) 
+references hdb_loading_application (loading_application_id);
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_computation
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_computation for cp_computation;
+grant select on cp_computation to public;
+grant select,insert,update,delete on cp_computation to calc_definition_role;
+grant select,insert,update,delete on cp_computation to savoir_faire;
+
+
+---------------------------------------------------------------------------
+-- This table represents archive of the computation table.
+---------------------------------------------------------------------------
+CREATE TABLE CP_COMPUTATION_ARCHIVE
+(
+	COMPUTATION_ID NUMBER NOT NULL,
+	COMPUTATION_NAME VARCHAR2(64) NOT NULL,
+	ALGORITHM_ID NUMBER,                -- Must be assigned to execute.
+	CMMNT VARCHAR2(1000),
+	LOADING_APPLICATION_ID NUMBER,      -- App to execute this comp.
+	                                     -- (null means not currently assigned)
+	DATE_TIME_LOADED DATE NOT NULL,
+	ENABLED VARCHAR2(1) DEFAULT 'N',
+	EFFECTIVE_START_DATE_TIME DATE NULL,
+	EFFECTIVE_END_DATE_TIME DATE NULL,
+    ARCHIVE_REASON VARCHAR2(10) NOT NULL,
+    DATE_TIME_ARCHIVED DATE     NOT NULL,
+    ARCHIVE_CMMNT VARCHAR2(1000)
+)
+tablespace HDB_data
+;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_computation_archive
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_computation_archive for cp_computation_archive;
+grant select on cp_computation_archive to public;
+
+---------------------------------------------------------------------------
+-- This table stores additional info about time-series params for a computation.
+---------------------------------------------------------------------------
+CREATE TABLE CP_COMP_TS_PARM
+(
+	COMPUTATION_ID NUMBER NOT NULL,
+	ALGO_ROLE_NAME VARCHAR2(24) NOT NULL,
+	SITE_DATATYPE_ID NUMBER NOT NULL,
+	INTERVAL VARCHAR2(24) NOT NULL,
+	TABLE_SELECTOR VARCHAR2(24) NOT NULL,  -- not req'd by some DBs
+	DELTA_T NUMBER DEFAULT 0,
+	MODEL_ID NUMBER DEFAULT NULL           -- null for real data
+) 
+tablespace HDB_data
+;
+
+--  primary key for table cp_comp_ts_parm
+alter table cp_comp_ts_parm  add constraint cpctp_compute_algoname_pk 
+primary key (computation_id, algo_role_name) 
+using index tablespace hdb_idx;
+
+-- removed to use primary key constraint instead
+--CREATE UNIQUE INDEX CP_COMP_TS_PARM
+--	ON CP_COMP_TS_PARM(COMPUTATION_ID, ALGO_ROLE_NAME) tablespace HDB_idx;
+
+--  foreign key for table cp_comp_ts_parm on computation_id from cp_computation
+alter table cp_comp_ts_parm add constraint cpctp_computation_id_fk 
+foreign key (computation_id) 
+references cp_computation (computation_id) on delete cascade;
+
+--  foreign key for table cp_comp_ts_parm on site_datatype_id from hdb_site_datatype
+alter table cp_comp_ts_parm add constraint cpctp_site_datatype_id_fk 
+foreign key (site_datatype_id) 
+references hdb_site_datatype (site_datatype_id);
+
+--  foreign key for table cp_comp_ts_parm on interval from hdb_interval
+alter table cp_comp_ts_parm add constraint cpctp_interval_fk 
+foreign key (interval) 
+references hdb_interval (interval_name);
+
+--  check constraint to insure table_selector only M_ or R_
+--disabled or removed for remote computation processor computations
+--  M. A.  Bogner July 2010
+-- alter table cp_comp_ts_parm add constraint check_ts_MORR 
+-- check (table_selector in ('M_','R_'));
+
+---------------------------------------------------------------------------
+-- the privileges for table cp_comp_ts_parm
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_comp_ts_parm for cp_comp_ts_parm;
+grant select on cp_comp_ts_parm to public;
+grant select,insert,update,delete on cp_comp_ts_parm to calc_definition_role;
+grant select,insert,update,delete on cp_comp_ts_parm to savoir_faire;
+
+---------------------------------------------------------------------------
+-- This table represents archive of the cp params table.
+---------------------------------------------------------------------------
+CREATE TABLE CP_COMP_TS_PARM_ARCHIVE
+(
+	COMPUTATION_ID NUMBER NOT NULL,
+	ALGO_ROLE_NAME VARCHAR2(24) NOT NULL,
+	SITE_DATATYPE_ID NUMBER NOT NULL,
+	INTERVAL VARCHAR2(24),
+	TABLE_SELECTOR VARCHAR2(24),           -- not req'd by some DBs
+	DELTA_T NUMBER DEFAULT 0,
+	MODEL_ID NUMBER DEFAULT NULL,           -- null for real data
+    ARCHIVE_REASON VARCHAR2(10) NOT NULL,
+    DATE_TIME_ARCHIVED DATE     NOT NULL,
+    ARCHIVE_CMMNT VARCHAR2(1000)
+) 
+tablespace HDB_data
+;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_comp_ts_parm_archive
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_comp_ts_parm_archive for cp_comp_ts_parm_archive;
+grant select on cp_comp_ts_parm_archive to public;
+
+---------------------------------------------------------------------------
+-- This table stores additional named properties that apply to a computation.
+---------------------------------------------------------------------------
+CREATE TABLE CP_COMP_PROPERTY
+(
+	COMPUTATION_ID NUMBER NOT NULL,
+	PROP_NAME VARCHAR2(24) NOT NULL,
+	PROP_VALUE VARCHAR2(240) NOT NULL
+)
+tablespace HDB_data
+;
+
+--  primary key for table cp_comp_property
+alter table cp_comp_property  add constraint cpcp_compute_propname_pk 
+primary key (computation_id, prop_name) 
+using index tablespace hdb_idx;
+
+-- removed to use primary key constraint instead
+--CREATE UNIQUE INDEX CP_COMP_PROPERTY
+--	ON CP_COMP_PROPERTY(COMPUTATION_ID, PROP_NAME) tablespace HDB_idx;
+
+-- foreign key for table cp_comp_property of computation_id on table cp_computation
+alter table cp_comp_property add constraint cpcp_computation_id_fk 
+foreign key (computation_id) 
+references cp_computation (computation_id) on delete cascade;
+
+---------------------------------------------------------------------------
+-- the privileges for table cp_comp_property
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_comp_property for cp_comp_property;
+grant select on cp_comp_property to public;
+grant select,insert,update,delete on cp_comp_property to calc_definition_role;
+grant select,insert,update,delete on cp_comp_property to savoir_faire;
+
+---------------------------------------------------------------------------
+-- This table represents archive of the cp property table.
+---------------------------------------------------------------------------
+CREATE TABLE CP_COMP_PROPERTY_ARCHIVE
+(
+	COMPUTATION_ID NUMBER NOT NULL,
+	PROP_NAME VARCHAR2(24) NOT NULL,
+	PROP_VALUE VARCHAR2(240) NOT NULL,
+    ARCHIVE_REASON VARCHAR2(10) NOT NULL,
+    DATE_TIME_ARCHIVED DATE     NOT NULL,
+    ARCHIVE_CMMNT VARCHAR2(1000)
+)
+tablespace HDB_data
+;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_comp_property_archive
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+create public synonym cp_comp_property_archive for cp_comp_property_archive;
+grant select on cp_comp_property_archive to public;
+
+
+REM CP_HISTORIC_COMPUTATIONS
+
+  CREATE TABLE cp_historic_computations
+  ( LOADING_APPLICATION_ID NUMBER NOT NULL ENABLE,
+    SITE_DATATYPE_ID NUMBER NOT NULL ENABLE,
+        INTERVAL VARCHAR2(16) NOT NULL ENABLE,
+        START_DATE_TIME DATE NOT NULL ENABLE,
+        END_DATE_TIME DATE NOT NULL ENABLE,
+        TABLE_SELECTOR VARCHAR2(24) NOT NULL ENABLE,
+        MODEL_RUN_ID NUMBER NOT NULL ENABLE,
+        DATE_TIME_LOADED DATE NOT NULL ENABLE,
+        READY_FOR_DELETE VARCHAR2(1)
+)
+tablespace HDB_DATA;
+
+
+alter table cp_historic_computations add CONSTRAINT CP_HC_PK
+PRIMARY KEY (LOADING_APPLICATION_ID,SITE_DATATYPE_ID,INTERVAL,START_DATE_TIME,END_DATE_TIME)
+using index tablespace hdb_idx;
+
+alter table cp_historic_computations add CONSTRAINT CPHC_INTERVAL_FK
+FOREIGN KEY (INTERVAL) REFERENCES HDB_INTERVAL(INTERVAL_NAME);
+
+alter table cp_historic_computations add CONSTRAINT CPHC_LOADING_APP_ID_FK
+FOREIGN KEY (LOADING_APPLICATION_ID)REFERENCES HDB_LOADING_APPLICATION(LOADING_APPLICATION_ID);
+
+create or replace public synonym cp_historic_computations for cp_historic_computations;
+
+---------------------------------------------------------------------------
+-- the priveleges for table cp_historic_computations
+-- everyone should be at least able to read it
+---------------------------------------------------------------------------
+grant select on cp_historic_computations to public;
+grant select, insert,update, delete on cp_historic_computations to savoir_faire;
+grant select, insert,update, delete on cp_historic_computations to app_role;
+
+CREATE TABLE CP_REMOTE_TRIGGERING
+(
+	SITE_DATATYPE_ID		NUMBER(10) NOT NULL,
+	INTERVAL			VARCHAR2(64) NOT NULL,
+	TABLE_SELECTOR			VARCHAR2(24) NOT NULL,	
+	DB_LINK				VARCHAR2(128) NOT NULL,
+	EFFECTIVE_START_DATE_TIME	DATE,
+	EFFECTIVE_END_DATE_TIME		DATE,
+	ACTIVE_FLAG			VARCHAR2(1)  DEFAULT 'Y' NOT NULL,
+	DATE_TIME_LOADED		DATE
+)
+tablespace HDB_data;
+
+create or replace trigger cprt_before_insert_update
+before             insert OR update 
+on                cp_remote_triggering
+for   each row
+declare
+
+begin
+    
+    /* created by M.  Bogner 05/07/2010  */
+    /*
+    The purpose of this trigger is to keep the date_time_loaded column updated 
+    on inserts or updates
+    
+    */
+    
+	:new.date_time_loaded := sysdate;
+ 
+end;
+/
+
+--drop public synonym CP_REMOTE_TRIGGERING;
+create or replace public synonym CP_REMOTE_TRIGGERING for CP_REMOTE_TRIGGERING;
+grant select on CP_REMOTE_TRIGGERING to public;
+grant select,insert,update,delete on CP_REMOTE_TRIGGERING to SAVOIR_FAIRE;
+grant select,insert,update,delete on CP_REMOTE_TRIGGERING to APP_ROLE;
+grant select,insert,update,delete on CP_REMOTE_TRIGGERING to REF_META_ROLE;
+
+spool off
+exit;

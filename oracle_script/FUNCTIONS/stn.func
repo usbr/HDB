@@ -1,0 +1,20 @@
+create or replace function STN(txt in varchar2) 
+ return number is 
+begin
+
+/*  Function STN is a safe TO_NUMBER function, it returns the TO_NUMBER value
+    of the passed in txt and retruns a null if the TO_NUMBER function results 
+    in an exception                                                            */
+/* This function was discovered on the internet and adapted for HDB use 
+    by M. Bogner April 2013                                                    */
+
+  return to_number(txt);
+  exception when value_error then
+  return null; 
+end STN;
+.
+/
+
+create or replace public synonym STN for STN;
+grant execute on STN to public;
+

@@ -1,0 +1,28 @@
+create or replace FUNCTION GSNA(
+	  P_SITE_ID NUMBER,P_ATTR_ID NUMBER,P_EFF_DATE DATE DEFAULT sysdate)
+	RETURN FLOAT IS
+		return_value FLOAT;
+	BEGIN
+	/* this function returns the Numeric value in the ref_site_attr table
+	with the input site, attribute id, and effective date
+	*/
+
+	/*  this function written by M. Bogner  11/15/2012 */
+		begin
+		return_value := NULL;
+		select a.value  into return_value
+		  from ref_site_attr a
+		  where a.site_id = P_SITE_ID
+		  and a.attr_id = P_ATTR_ID
+		  and P_EFF_DATE >= a.effective_start_date_time
+		  and P_EFF_DATE < nvl(a.effective_end_date_time,sysdate+365000);
+
+		exception when others then return_value := NULL;
+		end;
+
+	   return (return_value);
+	END;
+/
+show errors;
+GRANT EXECUTE ON GSNA TO PUBLIC;
+

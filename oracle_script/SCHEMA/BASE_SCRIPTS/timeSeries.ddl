@@ -3,11 +3,12 @@
    will be *bad*. Change table, PK and index creation statements only for
    those tables which will have an initial data load.
 
-   Altered by Andrew Gilmore to reflect estimated initial load/first few
-   months storage need. Initial storages taken from current UCHDB2 size as of May 5, 2005.
-
 */
      
+set echo on
+set feedback on
+spool hdb_timeseries.out
+
 create table m_day (                                        
 model_run_id                   number(11) NOT NULL  ,      
 site_datatype_id               number(11) NOT NULL  ,     
@@ -16,19 +17,21 @@ end_date_time                  date NOT NULL,
 value                          float NOT NULL           
 )                                                      
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 400M)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                       
 
 ALTER TABLE m_day
       ADD ( CONSTRAINT m_day_pk
-            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time)
- using index storage (initial 300M) tablespace hdb_idx);
+            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);
 
 create index m_day_date_idx
 on m_day(start_date_time)
 tablespace HDB_idx
-storage(initial 200M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table m_hour (                                            
@@ -39,19 +42,21 @@ end_date_time                  date NOT NULL,
 value                          float NOT NULL                
 )                                                           
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                       
 
 ALTER TABLE m_hour    
       ADD ( CONSTRAINT m_hour_pk 
-            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time)
- using index storage (initial 64k) tablespace hdb_idx);
+            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);
 
 create index m_hour_date_idx
 on m_hour(start_date_time)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table m_month (                                               
@@ -62,19 +67,20 @@ end_date_time                  date NOT NULL,
 value                          float NOT NULL                    
 )                                                               
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 70M)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                       
-
 ALTER TABLE m_month       
       ADD ( CONSTRAINT m_month_pk 
-            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time)
- using index storage (initial 70M) tablespace hdb_idx); 
+            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx); 
 
 create index m_month_date_idx
 on m_month(start_date_time)
 tablespace HDB_idx
-storage(initial 30M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table m_monthrange (                 
@@ -85,20 +91,22 @@ end_date_month                 date NOT NULL  ,
 value                          float NOT NULL       
 )                                                  
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                        
 
 ALTER TABLE m_monthrange               
       ADD ( CONSTRAINT m_monthrange_pk 
             PRIMARY KEY (model_run_id,site_datatype_id,
-                         start_date_month)
- using index storage (initial 64k) tablespace hdb_idx); 
+                         start_date_month) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx); 
 
 create index m_monthrange_date_idx
 on m_monthrange(start_date_month, end_date_month)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table m_monthstat (                       
@@ -108,19 +116,21 @@ month                          number(11) NOT NULL  ,
 value                          float NOT NULL          
 )                                                     
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                        
 
 ALTER TABLE m_monthstat
       ADD ( CONSTRAINT m_monthstat_pk
-            PRIMARY KEY (model_run_id,site_datatype_id,month )
-using index storage (initial 64k) tablespace hdb_idx); 
+            PRIMARY KEY (model_run_id,site_datatype_id,month ) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx); 
 
 create index m_monthstat_date_idx
 on m_monthstat(month)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table m_wy (                                  
@@ -131,19 +141,21 @@ end_date_time                  date NOT NULL,
 value                          float NOT NULL          
 )                                                     
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                        
 
 ALTER TABLE m_wy                         
       ADD ( CONSTRAINT m_wy_pk
-            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time)
- using index storage (initial 64k) tablespace hdb_idx);
+            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);
 
 create index m_wy_date_idx
 on m_wy(start_date_time)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table m_year (                                          
@@ -154,19 +166,21 @@ end_date_time                  date NOT NULL,
 value                          float NOT NULL              
 )                                                         
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                        
 
 ALTER TABLE m_year
       ADD ( CONSTRAINT m_year_pk
-            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time)
- using index storage (initial 64k) tablespace hdb_idx);  
+            PRIMARY KEY (model_run_id, site_datatype_id, start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);  
 
 create index m_year_date_idx
 on m_year(start_date_time)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_base
@@ -182,30 +196,36 @@ create table r_base
     collection_system_id         number NOT NULL,
     loading_application_id       number NOT NULL,
     method_id                    number NOT NULL,
-    computation_id               number NOT NULL
+    computation_id               number NOT NULL,
+    data_flags                   varchar2(20)
    )
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 600M)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                       
-alter table r_base add constraint
+
+alter table r_base add (constraint
     r_base_pk
     primary key (site_datatype_id, interval,
                  start_date_time,end_date_time)
-  using index storage (initial 600M) tablespace hdb_idx;
+using index storage(initial 70k next 70k pctincrease 0) tablespace HDB_idx);
+
 
 create index r_base_date_idx
 on r_base(start_date_time)
 tablespace HDB_idx
-storage(initial 250M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create index r_base_enddate_idx
 on r_base(end_date_time)
 tablespace HDB_idx
-storage(initial 250M)
+storage(initial 70k next 70k pctincrease 0)
 ;
-
+ 
 create table r_base_archive
    (site_datatype_id             number NOT NULL,
     interval                     varchar2(16) NOT NULL,
@@ -221,36 +241,32 @@ create table r_base_archive
     method_id                    number,
     computation_id               number,
     archive_reason               varchar2(10) not null,
-    date_time_archived           date not null
-   )
-pctfree 1 --never should get an update
-tablespace HDB_data
-storage (initial 600M)
-;                       
-
+    date_time_archived           date not null,
+    data_flags                   varchar2(20)
+   );
 
 create index r_base_archive_idx
 on r_base_archive(site_datatype_id,interval,start_date_time,end_date_time)
 tablespace HDB_idx
-storage(initial 600M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 
-create table r_base_update
+/* removed 2008 for cp project
+-- rem create table r_base_update
    (site_datatype_id             number NOT NULL,
     interval                     varchar2(16) NOT NULL,
     start_date_time              date NOT NULL,
     end_date_time                date NOT NULL,
     overwrite_flag               varchar2(1),
     ready_for_delete             varchar2(1)
-   )
-tablespace HDB_data
-storage(initial 10M);
-
-alter table r_base_update add constraint    r_base_update_pk
+   );
+-- rem alter table r_base_update add (constraint
+    r_base_update_pk
     primary key (site_datatype_id, interval,
                  start_date_time,end_date_time)
- using index storage (initial 64k) tablespace hdb_idx;
+using index storage(initial 70k next 70k pctincrease 0) tablespace HDB_idx);
+*/
 
 create table r_day (                           
 site_datatype_id               number(11) NOT NULL,
@@ -265,19 +281,22 @@ method_id                      number,
 derivation_flags               varchar2(20)
 )                                                    
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 500M)
+storage (initial 100k
+         next    100k
+         maxextents unlimited
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_day
       ADD ( CONSTRAINT r_day_pk
-            PRIMARY KEY (site_datatype_id,start_date_time)
- using index storage (initial 350M) tablespace hdb_idx);  
+            PRIMARY KEY (site_datatype_id,start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);  
 
 create index r_day_date_idx
 on r_day(start_date_time)
 tablespace HDB_idx
-storage(initial 250M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_daystat (                                           
@@ -287,19 +306,21 @@ value                          float NOT NULL  ,
 source_id                      number(11) NOT NULL             
 )                                                             
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 2M)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                        
 
 ALTER TABLE r_daystat
       ADD ( CONSTRAINT r_daystat_pk
-            PRIMARY KEY (site_datatype_id,day)
- using index storage (initial 3M) tablespace hdb_idx);  
+            PRIMARY KEY (site_datatype_id,day) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);  
 
 create index r_daystat_date_idx
 on r_daystat(day)
 tablespace HDB_idx
-storage(initial 3M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_hour (                           
@@ -315,19 +336,22 @@ method_id                      number,
 derivation_flags               varchar2(20)
 )                                                    
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 300M)
+storage (initial 100k
+         next    100k
+         maxextents unlimited
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_hour
       ADD ( CONSTRAINT r_hour_pk
-            PRIMARY KEY (site_datatype_id,start_date_time)
- using index storage (initial 250M) tablespace hdb_idx);
+            PRIMARY KEY (site_datatype_id,start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);
 
 create index r_hour_date_idx
 on r_hour(start_date_time)
 tablespace HDB_idx
-storage(initial 200M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_hourstat (                             
@@ -337,19 +361,21 @@ value                          float NOT NULL  ,
 source_id                      number(11) NOT NULL     
 )                                                     
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_hourstat   
       ADD ( CONSTRAINT r_hourstat_pk
-            PRIMARY KEY (site_datatype_id,hour)
- using index storage (initial 64k) tablespace hdb_idx); 
+            PRIMARY KEY (site_datatype_id,hour) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx); 
 
 create index r_hourstat_date_idx
 on r_hourstat(hour)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_instant (                           
@@ -365,20 +391,23 @@ method_id                      number,
 derivation_flags               varchar2(20)
 )                                                    
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 500M)
+storage (initial 1024k
+         next    1024k
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_instant
       ADD ( CONSTRAINT r_instant_pk
             PRIMARY KEY (site_datatype_id, start_date_time)
-            using index storage (initial 400M)
+            using index storage (initial 80k next 80k pctincrease 0)
             tablespace hdb_idx); 
 
 create index r_instant_date_idx
 on r_instant(start_date_time)
 tablespace HDB_idx
-storage(initial 300M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 
@@ -395,18 +424,21 @@ method_id                      number,
 derivation_flags               varchar2(20)
 )                                                    
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 10M)
+storage (initial 100k
+         next    100k
+         maxextents unlimited
+         pctincrease 0)
 ;                       
 ALTER TABLE r_month      
       ADD ( CONSTRAINT r_month_pk
-            PRIMARY KEY (site_datatype_id,start_date_time)
- using index storage (initial 10M) tablespace hdb_idx);   
+            PRIMARY KEY (site_datatype_id,start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);   
 
 create index r_month_date_idx
 on r_month(start_date_time)
 tablespace HDB_idx
-storage(initial 4M)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_monthstat (                              
@@ -416,19 +448,21 @@ value                          float NOT NULL  ,
 source_id                      number(11) NOT NULL  
 )                                                  
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_monthstat
       ADD ( CONSTRAINT r_monthstat_pk
-            PRIMARY KEY (site_datatype_id,month )
- using index storage (initial 64k) tablespace hdb_idx);
+            PRIMARY KEY (site_datatype_id,month ) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);
 
 create index r_monthstat_date_idx
 on r_monthstat(month)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_monthstatrange (                       
@@ -439,19 +473,21 @@ value                          float NOT NULL  ,
 source_id                      number(11) NOT NULL     
 )                                                     
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_monthstatrange         
       ADD ( CONSTRAINT r_monthstatrange_pk
-          PRIMARY KEY (site_datatype_id,start_month,end_month)
- using index storage (initial 64k) tablespace hdb_idx);  
+          PRIMARY KEY (site_datatype_id,start_month,end_month) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);  
 
 create index r_monthstatrange_date_idx
 on r_monthstatrange(start_month, end_month)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_wy (                           
@@ -467,19 +503,22 @@ method_id                      number,
 derivation_flags               varchar2(20)
 )                                                    
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 400k)
+storage (initial 100k
+         next    100k
+         maxextents unlimited
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_wy    
       ADD ( CONSTRAINT r_wy_pk 
-            PRIMARY KEY (site_datatype_id,start_date_time)
- using index storage (initial 250k) tablespace hdb_idx);   
+            PRIMARY KEY (site_datatype_id,start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);   
 
 create index r_wy_date_idx
 on r_wy(start_date_time)
 tablespace HDB_idx
-storage(initial 150k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_wystat (                                         
@@ -489,19 +528,21 @@ value                          float NOT NULL  ,
 source_id                      number(11) NOT NULL          
 )                                                          
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                      
 
 ALTER TABLE r_wystat
       ADD ( CONSTRAINT r_wystat_pk
-            PRIMARY KEY (site_datatype_id,wy)
- using index storage (initial 64k) tablespace hdb_idx); 
+            PRIMARY KEY (site_datatype_id,wy) using index storage (initial 70k next 80k pctincrease 0) tablespace hdb_idx); 
 
 create index r_wystat_date_idx
 on r_wystat(wy)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 
@@ -518,19 +559,22 @@ method_id                      number,
 derivation_flags               varchar2(20)
 )                                                    
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 400k)
+storage (initial 100k
+         next    100k
+         maxextents unlimited
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_year
       ADD ( CONSTRAINT r_year_pk 
-            PRIMARY KEY (site_datatype_id,start_date_time)
- using index storage (initial 250k) tablespace hdb_idx);  
+            PRIMARY KEY (site_datatype_id,start_date_time) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);  
 
 create index r_year_date_idx
 on r_year(start_date_time)
 tablespace HDB_idx
-storage(initial 150k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_yearstat (                                    
@@ -542,18 +586,19 @@ source_id                      number(11) NOT NULL
 pctfree 10
 pctused 80
 tablespace HDB_data
-storage (initial 64k)
+storage (initial 100k
+         next    100k
+         pctincrease 0)
 ;                        
 
 ALTER TABLE r_yearstat
       ADD ( CONSTRAINT r_yearstat_pk
-            PRIMARY KEY (site_datatype_id,year)
- using index storage (initial 64k) tablespace hdb_idx);  
+            PRIMARY KEY (site_datatype_id,year) using index storage (initial 80k next 80k pctincrease 0) tablespace hdb_idx);  
 
 create index r_yearstat_date_idx
 on r_yearstat(year)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 create table r_other (                           
@@ -569,20 +614,25 @@ method_id                      number,
 derivation_flags               varchar2(20)
 )                                                    
 pctfree 10
+pctused 80
 tablespace HDB_data
-storage (initial 1024k)
+storage (initial 1024k
+         next    1024k
+         pctincrease 0)
 ;                       
 
 ALTER TABLE r_other
       ADD ( CONSTRAINT r_other_pk
             PRIMARY KEY (site_datatype_id, start_date_time, end_date_time)
-            using index storage (initial 64k)
+            using index storage (initial 80k next 80k pctincrease 0)
             tablespace hdb_idx); 
 
 create index r_other_date_idx
 on r_other(start_date_time)
 tablespace HDB_idx
-storage(initial 64k)
+storage(initial 70k next 70k pctincrease 0)
 ;
 
 
+spool off
+exit;

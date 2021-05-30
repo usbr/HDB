@@ -1,0 +1,8 @@
+  CREATE OR REPLACE TRIGGER HDB_GAGETYPE_PK_TRIG
+  BEFORE INSERT OR UPDATE ON HDB_GAGETYPE
+  REFERENCING FOR EACH ROW
+  BEGIN IF inserting THEN IF populate_pk.pkval_pre_populated = FALSE THEN :new.GAGETYPE_ID := populate_pk.get_pk_val( 'HDB_GAGETYPE', FALSE );  END IF; ELSIF updating THEN :new.GAGETYPE_ID := :old.GAGETYPE_ID; END IF; END;
+/
+
+
+show errors trigger HDB_GAGETYPE_PK_TRIG;

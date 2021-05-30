@@ -73,9 +73,9 @@ CREATE OR REPLACE PROCEDURE update_m_table (
  show errors;
 /
 
-create public synonym update_m_table for update_m_table;
+create or replace public synonym update_m_table for update_m_table;
 grant execute on update_m_table to app_role;
 grant execute on update_m_table to savoir_faire;
-grant execute on update_m_table to model_role;
+grant execute on update_m_table to model_priv_role;
 
 /

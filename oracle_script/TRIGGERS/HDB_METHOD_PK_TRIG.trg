@@ -1,0 +1,7 @@
+  CREATE OR REPLACE TRIGGER HDB_METHOD_PK_TRIG
+  BEFORE INSERT OR UPDATE ON HDB_METHOD
+  REFERENCING FOR EACH ROW
+  BEGIN IF inserting THEN IF populate_pk.pkval_pre_populated = FALSE THEN :new.METHOD_ID := populate_pk.get_pk_val( 'HDB_METHOD', FALSE );  END IF; ELSIF updating THEN :new.METHOD_ID := :old.METHOD_ID; END IF; END;
+/
+
+show errors trigger HDB_METHOD_PK_TRIG;

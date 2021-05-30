@@ -1,0 +1,27 @@
+CREATE OR REPLACE FUNCTION FIND_RATING 
+( rating_type in varchar2
+, indep_sdi in number
+, value_date_time in date default null
+) return number is
+rating number;
+begin
+
+  select rating_id into rating
+  from ref_site_rating
+  where
+  indep_site_datatype_id = indep_sdi and
+  rating_type_common_name = rating_type and
+  value_date_time between effective_start_date_time and effective_end_date_time;
+
+  if rating is null
+  then rating := -1;
+  end if;
+  
+  return rating;
+  
+end find_rating;
+/
+
+show errors
+GRANT EXECUTE ON FIND_RATING TO PUBLIC;
+CREATE OR REPLACE PUBLIC SYNONYM FIND_RATING FOR FIND_RATING;

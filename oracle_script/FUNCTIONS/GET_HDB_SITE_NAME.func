@@ -1,0 +1,23 @@
+CREATE OR REPLACE FUNCTION GET_HDB_SITE_NAME (site_no in NUMBER)
+return VARCHAR2
+IS
+
+  object_name VARCHAR2(240);
+BEGIN
+
+   SELECT site_name into object_name
+   FROM hdb_site
+   WHERE site_id = site_no;
+
+   if object_name = null then object_name := ' '; end if;
+
+   return (object_name);
+
+
+END;
+/
+
+show errors;
+GRANT EXECUTE ON GET_HDB_SITE_NAME TO PUBLIC;
+
+

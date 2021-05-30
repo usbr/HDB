@@ -1,2 +1,36 @@
-@ ./PACKAGES/pop_pk.sps
-@ ./PACKAGES/pop_pk.spb
+set echo on
+set feedback on
+spool hdb_packages.out
+
+start ./PACKAGES/cp_remote_trigger.sps
+start ./PACKAGES/cp_remote_trigger.spb
+start ./PACKAGES/hdb_poet.sps
+start ./PACKAGES/hdb_poet.spb
+start ./PACKAGES/hdb_utilities.sps
+start ./PACKAGES/hdb_utilities.spb
+start ./PACKAGES/pop_pk.sps
+start ./PACKAGES/pop_pk.spb
+start ./PACKAGES/pre_processor.sps
+start ./PACKAGES/pre_processor.spb
+start ./PACKAGES/ratings_pkg.sps
+start ./PACKAGES/ratings_pkg.spb
+start ./PACKAGES/riverware_connection.sps
+start ./PACKAGES/riverware_connection.spb
+--  cp_processor package added for CP upgrade 3.0
+start ./PACKAGES/cp_processor.sps
+start ./PACKAGES/cp_processor.spb
+start ./PACKAGES/snapshot_manager.sps
+start ./PACKAGES/snapshot_manager.spb
+--  packages added for ensemble
+start ./PACKAGES/ensemble.sps
+start ./PACKAGES/ensemble.spb
+-- datatype package
+start ./PACKAGES/datatype_pkg.sps
+-- TS_XFER packages added
+start ./PACKAGES/ts_xfer.sps
+start ./PACKAGES/ts_xfer.spb
+
+
+
+spool off
+exit;

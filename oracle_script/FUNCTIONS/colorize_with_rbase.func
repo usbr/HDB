@@ -1,0 +1,127 @@
+CREATE OR REPLACE FUNCTION colorize_with_rbase(
+	p_sdi IN NUMBER,
+	p_interval IN VARCHAR2,
+	p_start_time DATE,
+	p_value IN NUMBER)
+RETURN VARCHAR2
+ /* This function returns a color name to apply to a cell containing
+       this value.
+       These color names are from the known named colors, originating with X11, 
+       but also present in web browsers, .NET, and elsewhere.
+       
+       Colors were chosen to keep more normally editted data in pale colors, 
+       while making failed validations and computation process outputs stand out
+       
+       LightGray - missing
+       Red - failed validation
+       SkyBlue - overwrite
+       Yellow - computation processor algorithm
+       MistyRose - derivation flags is not null
+       PaleGreen - none of the above
+       
+       Example colors at http://en.wikipedia.org/wiki/Web_colors
+       
+       Initially written by Andrew Gilmore, May 20, 2008
+       Modified and function name change by M. Bogner 03/20/09
+       Modified for different color features and to include Riverware by M. Bogner 07/27/11
+    */
+IS
+/* Function to help display data for HDB Poet and other tools:
+   given a value and some information, return a color name to
+   show as a background for a cell containing that value.
+
+  Example query:
+  
+  select date_time, value, 
+  colorize_value(value, overwrite_flag, validation,method_id,
+  derivation_flags) as Color
+  from r_day, table(dates_between(TO_Date('05/14/2008', 'MM/dd/yyyy'),
+                                  TO_Date('05/19/2008', 'MM/dd/yyyy'),
+                                  'day')) dates
+  where
+  start_date_time(+) = dates.date_time and
+  site_datatype_id(+) = 1923
+  order by dates.date_time;
+  
+  Output:
+  
+  DATE_TIME	VALUE	COLOR
+14-MAY-08 00:00	7467.78	SkyBlue
+15-MAY-08 00:00	null	LightGray
+16-MAY-08 00:00	7400.09	MistyRose
+17-MAY-08 00:00	7469.35	PaleGreen
+18-MAY-08 00:00	7470.09	Yellow
+19-MAY-08 00:00	null	LightGray
+
+
+   */
+
+/* now the local variables needed  */
+
+l_value NUMBER;
+l_overwrite VARCHAR2(1);
+l_validation VARCHAR2(1);
+l_app_id NUMBER;
+l_comp_id NUMBER;
+l_data_flags VARCHAR2(20);
+l_collect_id NUMBER;
+
+BEGIN
+
+  BEGIN
+  
+	select value,overwrite_flag,validation,loading_application_id,computation_id,data_flags,
+	collection_system_id
+	into l_value,l_overwrite,l_validation,l_app_id,l_comp_id,l_data_flags,l_collect_id
+	from r_base where
+	site_datatype_id = p_sdi and interval = p_interval and start_date_time = p_start_time;
+	exception when others then l_value := null;
+  END;
+
+  IF p_value IS NULL AND l_value IS NULL THEN
+    RETURN 'LightGray';
+  ELSIF l_validation = 'F' THEN
+    RETURN 'Red';
+  ELSIF ABS(p_value - l_value) > .01 THEN
+    RETURN 'HotPink';
+  ELSIF p_value IS NOT NULL AND l_value IS NULL THEN
+    RETURN 'DarkOrange';
+  ELSIF l_app_id = 7 and l_collect_id = 5 and l_overwrite = 'O' then
+    RETURN 'DarkTurquoise'; 
+  ELSIF l_app_id = 7 and l_collect_id = 5 then
+    RETURN 'Aquamarine'; 
+  ELSIF l_app_id = 7 and l_collect_id = 9 and l_overwrite = 'O' then
+    RETURN 'DarkKhaki'; 
+  ELSIF l_app_id = 7 and l_collect_id = 9 then
+    RETURN 'PaleGoldenrod'; 
+  ELSIF l_app_id not in (31,32,33,34,35,36,37,38,41,43,44,45,46,47,54,55,57,58,59,60,61,62,63,65,71)
+  and l_overwrite is null THEN
+	RETURN  'PaleGreen';
+  ELSIF l_app_id not in (31,32,33,34,35,36,37,38,41,43,44,45,46,47,54,55,57,58,59,60,61,62,63,65,71)
+  and l_overwrite = 'O' THEN
+	RETURN  'DarkSeaGreen';
+  ELSIF l_app_id in (31,32,33,34,35,36,37,38,41,43,44,45,46,47,54,57,60,61,62,63) and
+	l_overwrite = 'O' THEN
+	RETURN 'RoyalBlue';
+  ELSIF l_app_id in (31,32,33,34,35,36,37,38,41,43,44,45,46,47,54,57,60,61,62,63) and 
+	l_overwrite IS NULL THEN
+    RETURN 'SkyBlue';
+  ELSIF l_app_id in (55,58,59,65,71) and l_overwrite = 'O' THEN
+	RETURN 'Goldenrod';
+  ELSIF l_app_id in (55,58,59,71) THEN
+    RETURN 'Yellow';
+  ELSIF l_app_id in (65) THEN
+	RETURN 'Gold';
+  ELSIF l_data_flags IS NOT NULL THEN
+    RETURN 'MistyRose';
+  ELSE
+    RETURN 'PaleGreen';
+  END IF;
+
+END colorize_with_rbase;
+.
+/
+
+GRANT EXECUTE ON colorize_with_rbase TO PUBLIC;
+CREATE OR REPLACE PUBLIC SYNONYM colorize_with_rbase FOR colorize_with_rbase;
+

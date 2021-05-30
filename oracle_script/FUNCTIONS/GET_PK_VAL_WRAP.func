@@ -1,0 +1,19 @@
+CREATE OR REPLACE FUNCTION GET_PK_VAL_WRAP ( table_name IN  VARCHAR2, set_pkval IN BOOLEAN ) RETURN number IS
+
+	new_pk_val number(11) := NULL;
+
+ BEGIN
+   IF table_name LIKE 'HDB%' THEN
+    	new_pk_val := populate_pk_hdb.get_pk_val (table_name, set_pkval);
+   ELSE
+        new_pk_val := populate_pk_ref.get_pk_val (table_name, set_pkval);
+   END IF;
+
+   return new_pk_val;
+ END get_pk_val_wrap;
+/
+
+show errors;
+GRANT EXECUTE ON GET_PK_VAL_WRAP TO PUBLIC;
+
+

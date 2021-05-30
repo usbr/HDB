@@ -1,0 +1,38 @@
+
+BEGIN
+  DBMS_NETWORK_ACL_ADMIN.create_acl (
+    acl          => 'oraclemail.xml', 
+    description  => 'ACL for ORACLE MAIL',
+    principal    => 'APP_ROLE',
+    is_grant     => TRUE, 
+    privilege    => 'connect',
+    start_date   => SYSTIMESTAMP,
+    end_date     => NULL);
+END;
+.
+/
+
+BEGIN
+   DBMS_NETWORK_ACL_ADMIN.ASSIGN_ACL (
+    acl          => 'oraclemail.xml',                
+    host         => 'localhost');
+   COMMIT;
+
+END;
+.
+/
+
+BEGIN
+  DBMS_NETWORK_ACL_ADMIN.add_privilege ( 
+    acl         => 'oraclemail.xml', 
+    principal   => 'DBA',
+    is_grant    => TRUE, 
+    privilege   => 'connect', 
+    position    => NULL, 
+    start_date  => NULL,
+    end_date    => NULL);
+
+END;
+.
+/
+

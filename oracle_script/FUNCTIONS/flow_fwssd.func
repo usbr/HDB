@@ -1,0 +1,42 @@
+  
+create or replace FUNCTION FLOW_FWSSD(
+	  GATE_HT FLOAT, RES_ELEV FLOAT, TAIL_ELEV FLOAT) 
+	RETURN FLOAT IS
+		return_value FLOAT;
+	BEGIN 
+	/* this function returns the flow calculation for the FWSSD 
+	   Fish and wildlife Service South Dike site according 
+	   to the DENVER, CO flow calculation for that site
+	*/
+	
+	/*  this function written by M. Bogner  06/15/2011  */
+	
+		begin
+		return_value := NULL;
+		select CASE
+
+        WHEN (RES_ELEV > TAIL_ELEV AND GATE_HT >= TAIL_ELEV) THEN 
+        3.67*2.229*power((RES_ELEV - GATE_HT),1.5)
+
+        WHEN (TAIL_ELEV > RES_ELEV AND GATE_HT >= RES_ELEV) THEN 
+        -2.11*2.229*power((TAIL_ELEV - GATE_HT),1.5)
+
+        WHEN (TAIL_ELEV > RES_ELEV AND RES_ELEV > GATE_HT) THEN 
+        -4.51*2.229*power((TAIL_ELEV - GATE_HT),1.5)*power((1-power((RES_ELEV - GATE_HT)/(TAIL_ELEV - GATE_HT),1.5)),.385)
+
+        WHEN (RES_ELEV > TAIL_ELEV AND TAIL_ELEV > GATE_HT) THEN 
+        3.67*2.229*power((TAIL_ELEV - GATE_HT),1.5)*power((1-power((TAIL_ELEV - GATE_HT)/(RES_ELEV - GATE_HT),1.5)),.385)
+
+        ELSE 0.0 END
+		
+		into return_value from dual;
+		exception when others then return_value := NULL;
+		end;
+		
+	   return (return_value);
+	END;
+.
+/
+
+create or replace public synonym flow_fwssd for flow_fwssd;
+grant execute on flow_fwssd to public;

@@ -6,21 +6,21 @@ cursor c2 (c_sdi NUMBER) is
     select role from ref_auth_site_datatype where site_datatype_id = c_sdi;
 result VARCHAR2(24);
 BEGIN
-    if (DBMS_SESSION.Is_Role_Enabled ('APP_ROLE')) then
+    if (is_role_granted ('APP_ROLE')) then
         return;
     end if;
-    if (DBMS_SESSION.Is_Role_Enabled ('SAVOIR_FAIRE')) then
+    if (is_role_granted ('SAVOIR_FAIRE')) then
         return;
     end if;
     for role_record IN c1(cur_site) LOOP
         result := role_record.role;
-        if (DBMS_SESSION.Is_Role_Enabled (rtrim(result))) then
+        if (is_role_granted (rtrim(result))) then
             return;
         end if;
     end LOOP;
     for role_record IN c2(sdi) LOOP
         result := role_record.role;
-        if (DBMS_SESSION.Is_Role_Enabled (rtrim(result))) then
+        if (is_role_granted (rtrim(result))) then
             return;
         end if;
     end LOOP;

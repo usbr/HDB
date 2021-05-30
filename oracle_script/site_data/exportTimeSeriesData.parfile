@@ -1,9 +1,0 @@
-file=TimeSeriesData.dmp
-grants=N
-indexes=N
-rows=Y
-compress=Y
-constraints=N
-direct=Y
-log=TimeSeriesDataExp.log
-tables=(M_DAY,M_HOUR,M_MONTH,M_MONTHRANGE,M_MONTHSTAT,M_WY,M_YEAR,R_DAYSTAT,R_HOURSTAT,R_MONTH,R_MONTHSTAT,R_MONTHSTATRANGE,R_WY,R_WYSTAT,R_YEAR,R_YEARSTAT)

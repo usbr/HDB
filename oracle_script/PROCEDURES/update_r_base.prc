@@ -9,7 +9,9 @@ CREATE OR REPLACE PROCEDURE update_r_base ( SITE_DATATYPE_ID_IN NUMBER,
 			  COLLECTION_SYSTEM_ID_IN NUMBER,
 			  LOADING_APPLICATION_ID_IN NUMBER,
 			  METHOD_ID_IN NUMBER,
-			  COMPUTATION_ID_IN NUMBER ) IS
+			  COMPUTATION_ID_IN NUMBER,
+			  DATA_FLAGS_IN VARCHAR2 DEFAULT NULL,
+			  DATE_TIME_IN DATE DEFAULT SYSDATE ) IS
     rowcount NUMBER;
 BEGIN
     SELECT count ( * )
@@ -30,6 +32,8 @@ BEGIN
       'dd-MON-yyyy HH24:MI:SS' ) || ' HAS MULTIPLE ENTRIES. DANGER! DANGER! DANGER!.' );
     END IF;
 
+/*  Modified by M. Bogner for compatibility for derivation replacement coding  */
+
     UPDATE_R_BASE_RAW(SITE_DATATYPE_ID_IN,
 		       INTERVAL_IN,
 		       START_DATE_TIME_IN,
@@ -41,7 +45,9 @@ BEGIN
         	       COLLECTION_SYSTEM_ID_IN,
 		       LOADING_APPLICATION_ID_IN,
 		       METHOD_ID_IN,
-		       COMPUTATION_ID_IN );
+		       COMPUTATION_ID_IN,
+		       DATA_FLAGS_IN,
+		       DATE_TIME_IN );
 END;
 /
 

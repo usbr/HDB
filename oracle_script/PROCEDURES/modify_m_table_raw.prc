@@ -10,9 +10,12 @@ CREATE OR REPLACE PROCEDURE modify_m_table_raw  (
                               DO_UPDATE_Y_OR_N VARCHAR2 )
 IS
     ROWCOUNT NUMBER;
+    l_ts_id NUMBER;
+    l_model_id NUMBER;
     END_DATE_TIME_NEW DATE;
 BEGIN
-
+	/*  Modified by M.  Bogner  05/23/2012 to add Phase 3.0 mod to add entry to CP_TS_ID Table */ 
+	
     /*  First check for any null field that were passed  */
     IF MODEL_RUN_ID_IN IS NULL THEN DENY_ACTION ( 'INVALID <NULL> MODEL_RUN_ID' );
         ELSIF SITE_DATATYPE_ID_IN IS NULL THEN DENY_ACTION ( 'INVALID <NULL> SITE_DATATYPE_ID' );
@@ -20,6 +23,14 @@ BEGIN
         ELSIF START_DATE_TIME_IN IS NULL THEN DENY_ACTION ( 'INVALID <NULL> START_DATE_TIME' );
         ELSIF VALUE IS NULL THEN DENY_ACTION ( 'INVALID <NULL> VALUE' );
     END IF;
+
+    /* for phase 3.0 add this record to the CP_TS_ID table if it isn't already there  */
+    /* this procedure call added for Phase 3.0 project                                */
+      SELECT model_id
+        INTO l_model_id
+        FROM ref_model_run
+       WHERE model_run_id = MODEL_RUN_ID_IN;
+    CP_PROCESSOR.create_ts_id (SITE_DATATYPE_ID_IN,INTERVAL_IN,'M_',l_model_id,l_ts_id);
 
     /*  if user did not pass an end_date time, set the end date TIME based on START_DATE_TIME AND THE INTERVAL */
     END_DATE_TIME_NEW := END_DATE_TIME;
@@ -109,10 +120,10 @@ END;
  show errors;
 /
 
-create public synonym modify_m_table_raw for modify_m_table_raw;
+create or replace public synonym modify_m_table_raw for modify_m_table_raw;
 grant execute on modify_m_table_raw to app_role;
 grant execute on modify_m_table_raw to savoir_faire;
-grant execute on modify_m_table_raw to model_role;
+grant execute on modify_m_table_raw to model_priv_role;
 
 /
 

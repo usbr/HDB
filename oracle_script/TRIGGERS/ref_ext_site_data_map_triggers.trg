@@ -15,7 +15,7 @@ begin
       and primary_site_code = :new.primary_site_code
       and primary_data_code = :new.primary_data_code
       and lower(extra_keys_y_n) = 'n'
-      and mapping_id <> :new.mapping_id;
+      and mapping_id <> nvl(:new.mapping_id,-9999);
  
     if (count_0_keys > 0) then
       deny_action ('There is already a mapping for this source/site/data code with no extra keys.');

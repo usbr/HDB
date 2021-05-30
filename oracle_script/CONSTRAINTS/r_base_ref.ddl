@@ -11,10 +11,6 @@ alter table r_base add constraint
     foreign key  (agen_id)
     references hdb_agen(agen_id);
 alter table r_base add constraint
-    r_base_fk4
-    foreign key  (computation_id)
-    references hdb_computed_datatype(computation_id);
-alter table r_base add constraint
     r_base_fk5
     foreign key  (method_id)
     references hdb_method(method_id);
@@ -34,3 +30,9 @@ alter table r_base add constraint
    r_base_fk9
    foreign key (validation)
    references  hdb_validation(validation);
+
+-- this added for the computation processor project
+alter table r_base add constraint 
+   r_base_computation_id_fk
+   foreign key (computation_id) references cp_computation (computation_id);
+

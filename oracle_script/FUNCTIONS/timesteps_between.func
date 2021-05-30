@@ -1,0 +1,118 @@
+CREATE OR REPLACE FUNCTION TIMESTEPS_BETWEEN (start_date_time IN DATE,
+                                            end_date_time IN DATE,
+                                            interval VARCHAR2 DEFAULT 'day',
+                                            minutes IN INTEGER DEFAULT 1440)
+RETURN date_array
+PIPELINED
+
+/*  This function returns a list of datetimes beginning at the
+      specified start_date, spaced at the specified interval,
+      and ending at the specified end time.
+
+    Change Log:
+    23MAY2008: dates_between and instants_between written by Andrew Gilmore
+    07FEB2017: consolidated 2 functions into 1 and added logic to 'snap' dates
+                based on the selected interval, jrocha
+    24JAN2018: Hour and day intervals have open end intervals like the rest
+*/
+
+IS
+end_date DATE := end_date_time;
+start_date DATE := start_date_time;
+dates date_object := date_object(NULL);
+temp_chars VARCHAR2(30);
+intervalsperday NUMBER := 1440 / minutes;
+
+BEGIN
+  IF end_date < start_date THEN
+    deny_action('End date must come after start date!');
+  END IF;
+
+  BEGIN
+    SELECT interval_name
+    INTO temp_chars
+    FROM hdb_interval
+    WHERE interval_name = interval;
+
+  EXCEPTION WHEN others THEN
+    deny_action('Dates between function INVALID ' || interval || ' interval');
+  END;
+
+  CASE interval
+  WHEN 'instant' THEN
+    IF end_date_time < start_date_time THEN
+      deny_action('End date must be after start date!');
+    END IF;
+    FOR i IN 0 .. (end_date - start_date) * (intervalsperday) - 1
+    LOOP
+      dates.date_time := start_date_time + i / intervalsperday;
+      pipe ROW(dates);
+    END LOOP;
+
+  WHEN 'hour' THEN
+    IF end_date IS NULL THEN
+      end_date := TRUNC(sysdate, 'HH24') + 1 / 24;
+    END IF;
+    FOR i IN 0 ..(end_date - start_date) * 24 - 1
+    LOOP
+      dates.date_time := start_date_time + i / 24;
+      pipe ROW(dates);
+    END LOOP;
+
+  WHEN 'day' THEN
+    IF end_date IS NULL THEN
+      end_date := TRUNC(sysdate,   'DD') + 1;
+    END IF;
+    FOR i IN 0 ..(end_date -start_date) - 1 
+    LOOP
+      dates.date_time := start_date_time + i;
+      pipe ROW(dates);
+    END LOOP;
+
+  WHEN 'month' THEN
+    IF end_date IS NULL THEN
+      end_date := TRUNC(sysdate, 'MM');
+    END IF;
+    /* months_between takes the later date first */
+    start_date := TRUNC(start_date, 'MM');
+    end_date := TRUNC(end_date, 'MM');
+    FOR i IN 0 .. months_between(end_date, start_date)
+    LOOP
+      dates.date_time := add_months(start_date, i);
+      pipe ROW(dates);
+    END LOOP;
+
+  WHEN 'year' THEN
+    IF end_date IS NULL THEN
+      end_date := TRUNC(sysdate, 'YYYY');
+    END IF;
+    /* months_between takes the later date first */
+    start_date := TRUNC(start_date, 'YYYY');
+    end_date := TRUNC(end_date, 'YYYY');
+    FOR i IN 0 .. months_between(end_date, start_date) / 12
+    LOOP
+      dates.date_time := add_months(start_date, i * 12);
+      pipe ROW(dates);
+    END LOOP;
+
+  WHEN 'wy' THEN
+    IF end_date IS NULL THEN
+      end_date := add_months(TRUNC(sysdate, 'YYYY'), -3);
+    END IF;
+    /* months_between takes the later date first */
+    start_date := add_months(TRUNC(start_date, 'YYYY'), 9);
+    end_date := add_months(TRUNC(end_date, 'YYYY'), 9);
+    FOR i IN 0 .. months_between(end_date, start_date) / 12
+    LOOP
+      dates.date_time := add_months(start_date, i * 12);
+      pipe ROW(dates);
+    END LOOP;
+  END CASE;
+
+  RETURN;
+END timesteps_between;
+/
+
+show errors
+GRANT EXECUTE ON TIMESTEPS_BETWEEN TO PUBLIC;
+CREATE OR REPLACE PUBLIC SYNONYM TIMESTEPS_BETWEEN FOR TIMESTEPS_BETWEEN;

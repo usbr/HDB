@@ -1,0 +1,6 @@
+CREATE OR REPLACE FORCE VIEW DAYS
+ ( "START_DATE_TIME"
+  )  AS 
+  select to_date('01-OCT-1877','DD-MON-YYYY') + rownum  start_date_time
+from r_day where rownum between 0 and 50000 ;
+grant select on DAYS to public;

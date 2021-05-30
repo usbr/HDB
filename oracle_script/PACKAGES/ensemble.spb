@@ -1,0 +1,451 @@
+
+CREATE OR REPLACE PACKAGE BODY ENSEMBLE AS 
+  
+  FUNCTION GET_MODEL_ID(P_MODEL_NAME VARCHAR2)
+    RETURN NUMBER IS
+      l_model_id HDB_MODEL.MODEL_ID%TYPE;
+    BEGIN
+    /*  This function was written to assist in finding the unique surrogate MODEL_ID
+        Number for a given MODEL_NAME in HDB.  The record is found in table HDB_MODEL.
+        If the record is not found, a negative -999 is returned.
+    
+        this function written by Mark Bogner   January 2013                   
+    */
+         
+      begin
+        select model_id into l_model_id
+          from hdb_model
+          where model_name = P_MODEL_NAME; 
+         exception when others then        
+	       l_model_id := -999;
+       end;
+    RETURN (l_model_id);
+  
+  END;  /* End of Function GET_MODEL_ID  */ 
+
+  
+  FUNCTION GET_ENSEMBLE_ID(P_ENSEMBLE_NAME VARCHAR2)
+    RETURN NUMBER IS
+      l_ensemble_id REF_ENSEMBLE.ENSEMBLE_ID%TYPE;
+    BEGIN
+    /*  This function was written to assist in finding the unique surrogate ENSEMBLE_ID
+        Number for a given ENSEMBLE_NAME in HDB.  The record is found in table REF_ENSEMBLE.
+        If the record is not found, a negative -999 is returned.
+    
+        this function written by Mark Bogner   January 2013
+    */
+         begin
+        select ensemble_id into l_ensemble_id
+          from ref_ensemble
+          where ensemble_name = P_ENSEMBLE_NAME; 
+         exception when others then        
+	       l_ensemble_id := -999;
+       end;
+    RETURN (l_ensemble_id);
+  
+  END;  /* End of Function GET_ENSEMBLE_ID  */ 
+
+  FUNCTION GET_MODEL_RUN_ID(P_MODEL_ID NUMBER, P_MODEL_RUN_NAME VARCHAR2 DEFAULT NULL, P_RUN_DATE DATE DEFAULT NULL, P_IS_RUNDATE_KEY VARCHAR2 DEFAULT 'N')
+  RETURN NUMBER IS
+      l_model_run_id REF_MODEL_RUN.MODEL_RUN_ID%TYPE;
+    BEGIN
+    /*  This function was written to assist in finding the unique surrogate MODEL_RUN_ID
+        Number for a given MODEL_ID, MODEL_RUN_NAME and possibly p_RUN_DATE in HDB.  The record is found 
+        in table TABLE REF_MODEL_RUN.
+        If the record is not found, a negative -999 is returned.
+    
+        this function written by Mark Bogner   January 2013
+    */
+     IF P_IS_RUNDATE_KEY = 'Y' THEN
+       begin
+        select rmr.model_run_id into l_model_run_id
+          from  ref_model_run rmr
+          where 
+              rmr.model_id = P_MODEL_ID
+          and rmr.run_date = P_RUN_DATE
+          and rmr.model_run_name = P_MODEL_RUN_NAME; 
+         exception when others then        
+	       l_model_run_id := -999;
+       end;
+       ELSE
+       begin
+        select rmr.model_run_id into l_model_run_id
+          from ref_model_run rmr
+          where 
+              rmr.model_id = P_MODEL_ID
+              and rmr.model_run_name = P_MODEL_RUN_NAME;
+         exception when others then        
+	       l_model_run_id := -999;
+	    end;
+       END IF;
+    RETURN (l_model_run_id);
+  
+  END;  /* End of Function GET_MODEL_RUN_ID  */ 
+
+
+  FUNCTION GET_ENSEMBLE_MRI(P_ENSEMBLE_ID NUMBER, P_TRACE_ID NUMBER, P_MODEL_ID NUMBER, 
+  P_MODEL_RUN_NAME VARCHAR2, P_RUN_DATE DATE DEFAULT NULL, P_IS_RUNDATE_KEY VARCHAR2 DEFAULT 'N')
+  RETURN NUMBER IS
+      l_model_run_id REF_MODEL_RUN.MODEL_RUN_ID%TYPE;
+    BEGIN
+    /*  This function was written to assist in finding the unique surrogate MODEL_RUN_ID
+        Number for a given ENSEMBLE, TRACE in HDB.  The record is found in table REF_ENSEMBLE_TRACE 
+        Joined with TABLE REF_MODEL_RUN.
+        If the record is not found, a negative -999 is returned.
+    
+        this function written by Mark Bogner   January 2013
+    */
+     IF P_IS_RUNDATE_KEY = 'Y' THEN
+       begin
+        select ret.model_run_id into l_model_run_id
+          from ref_ensemble_trace ret, ref_model_run rmr
+          where 
+              ret.ensemble_id = P_ENSEMBLE_ID
+          and ret.trace_id = P_TRACE_ID
+          and ret.model_run_id = rmr.model_run_id
+          and rmr.model_id = P_MODEL_ID
+          and rmr.run_date = P_RUN_DATE
+          and rmr.model_run_name = P_MODEL_RUN_NAME; 
+         exception when others then        
+	       l_model_run_id := -999;
+       end;
+       ELSE
+       begin
+        select ret.model_run_id into l_model_run_id
+          from ref_ensemble_trace ret, ref_model_run rmr
+          where 
+              ret.ensemble_id = P_ENSEMBLE_ID
+          and ret.trace_id = P_TRACE_ID
+          and ret.model_run_id = rmr.model_run_id
+          and rmr.model_id = P_MODEL_ID
+          and rmr.model_run_name = P_MODEL_RUN_NAME;
+         exception when others then        
+	       l_model_run_id := -999;
+	    end;
+       END IF;
+    RETURN (l_model_run_id);
+  
+  END;  /* End of Function GET_ENSEMBLE_MRI  */ 
+
+
+  PROCEDURE CREATE_MODEL(
+    P_MODEL_NAME VARCHAR2, 
+    P_COORDINATED VARCHAR2 DEFAULT 'N', 
+    P_CMMNT VARCHAR2 DEFAULT G_DEFAULT_CMMNT) 
+  IS
+      /* the local variables         */
+      procedure_indicator varchar2(100);
+      l_text     varchar2(200);
+      l_model_id HDB_MODEL.MODEL_ID%TYPE;
+      l_coordinated HDB_MODEL.COORDINATED%TYPE;
+      l_cmmnt    HDB_MODEL.CMMNT%TYPE;
+      
+ BEGIN
+ /*  This procedure was written to assist in the CP processing to create a record in HDB
+    in table HDB_MODEL so that the unique representation of a Model NAME record can be 
+    represented.
+    
+    this procedure written by Mark Bogner   January 2013
+ */
+
+  procedure_indicator := 'Model Create FAILED FOR: ';
+
+ /*  first do error checking  */
+    l_model_id := GET_MODEL_ID(P_MODEL_NAME);
+    IF P_MODEL_NAME IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> MODEL_NAME');
+	ELSIF P_COORDINATED IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> MODEL COORDINATED');
+	ELSIF L_MODEL_ID > 0 THEN 
+		DENY_ACTION(procedure_indicator || 'EXISTING MODEL_NAME');
+    END IF;
+
+    l_coordinated := substr(P_COORDINATED,1,1);
+    l_cmmnt := P_CMMNT;
+	/*  do the insert, using -1 as model_id since on insert trigger will populate  */
+    BEGIN
+
+       insert into HDB_MODEL HM
+       (HM.MODEL_ID,HM.MODEL_NAME,HM.COORDINATED,HM.CMMNT)
+        values (-1,P_MODEL_NAME,l_coordinated,l_cmmnt);
+    END;
+			
+END; /*  create_model procedure  */
+
+
+  PROCEDURE CREATE_ENSEMBLE(
+    P_ENSEMBLE_NAME VARCHAR2,
+    P_AGEN_ID NUMBER DEFAULT NULL,
+    P_TRACE_DOMAIN VARCHAR2 DEFAULT G_TRACE_DOMAIN_STANDARD,
+    P_CMMNT VARCHAR2 DEFAULT G_DEFAULT_CMMNT)
+  IS
+      /* the local variables         */
+      procedure_indicator varchar2(100);
+      l_ensemble_id REF_ENSEMBLE.ENSEMBLE_ID%TYPE;
+      l_trace_domain_standard REF_ENSEMBLE.TRACE_DOMAIN%TYPE := G_TRACE_DOMAIN_STANDARD;
+      l_default_cmmnt REF_ENSEMBLE.CMMNT%TYPE := G_DEFAULT_CMMNT;
+      
+ BEGIN
+ /*  This procedure was written to assist in the ENSEMBLE processing to create a record in HDB
+    in table HDB_ENSEMBLE so that the unique representation of a ENSEMBLE NAME record can be 
+    represented.
+    
+    this procedure written by Mark Bogner   January 2013
+ */
+
+  procedure_indicator := 'ENSEMBLE Create FAILED FOR: ';
+
+ /*  first do error checking  */
+    l_ensemble_id := GET_ENSEMBLE_ID(P_ENSEMBLE_NAME);
+    IF P_ENSEMBLE_NAME IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> ENSEMBLE_NAME');
+	ELSIF L_ENSEMBLE_ID > 0 THEN 
+		DENY_ACTION(procedure_indicator || 'EXISTING ENSEMBLE NAME');
+    END IF;
+
+    IF P_TRACE_DOMAIN IS NOT NULL THEN 
+       l_trace_domain_standard := P_TRACE_DOMAIN;
+    END IF;
+
+    IF P_CMMNT IS NOT NULL THEN 
+       l_default_cmmnt := P_CMMNT;
+    END IF;
+    
+	/*  do the insert, using -1 as ensemble_id since on insert trigger will populate  */
+    BEGIN
+
+       insert into REF_ENSEMBLE RE
+       (RE.ENSEMBLE_ID,RE.ENSEMBLE_NAME,RE.AGEN_ID,RE.TRACE_DOMAIN,RE.CMMNT)
+        values (-1,P_ENSEMBLE_NAME,P_AGEN_ID,l_trace_domain_standard,l_default_cmmnt);
+    END;
+			
+END; /*  create_ensemble procedure  */
+
+PROCEDURE CREATE_ENSEMBLE_TRACE(
+  P_ENSEMBLE_ID NUMBER, 
+  P_TRACE_ID NUMBER, 
+  P_TRACE_NUMERIC NUMBER, 
+  P_TRACE_NAME VARCHAR2, 
+  P_MODEL_RUN_ID NUMBER)
+  IS
+      /* the local variables         */
+      procedure_indicator varchar2(100);
+      
+ BEGIN
+ /*  This procedure was written to assist in the ENSEMBLE processing to create a record in HDB
+    in table HDB_ENSEMBLE_TRACE so that the unique representation of a ENSEMBLE and TRACE record 
+    to a model_run_id can be represented.
+    
+    this procedure written by Mark Bogner   January 2013
+    modified by M. Bogner March 26 2013 for business rule # 16 (see below)
+ */
+
+  procedure_indicator := 'ENSEMBLE_TRACE Create FAILED FOR: ';
+
+ /*  first do error checking  */
+    IF P_ENSEMBLE_ID IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> ENSEMBLE_ID');
+	ELSIF P_TRACE_ID IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> TRACE_ID');
+	ELSIF P_MODEL_RUN_ID < 1 THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> MODEL_RUN_ID');
+	ELSIF P_TRACE_NUMERIC IS NULL AND P_TRACE_NAME IS NULL THEN 
+		DENY_ACTION(procedure_indicator || 'BOTH <NULL> TRACE_NUMBER AND TRACE NAME');
+    END IF;
+
+	/*  do the insert */
+    BEGIN
+
+       insert into REF_ENSEMBLE_TRACE RET
+       (RET.ENSEMBLE_ID,RET.TRACE_ID,RET.TRACE_NUMERIC,RET.TRACE_NAME,RET.MODEL_RUN_ID)
+        values (P_ENSEMBLE_ID,P_TRACE_ID,P_TRACE_NUMERIC,P_TRACE_NAME,P_MODEL_RUN_ID);
+    END;
+			
+END; /*  create_ensemble_trace procedure  */
+
+  PROCEDURE CREATE_MODEL_RUN (
+    P_MODEL_RUN_NAME VARCHAR2, 
+    P_MODEL_ID NUMBER, 
+    P_RUN_DATE DATE, 
+    P_EXTRA_KEYS_Y_N VARCHAR2 DEFAULT 'N', 
+    P_START_DATE DATE DEFAULT NULL, 
+    P_END_DATE DATE DEFAULT NULL,
+    P_HYDROLOGIC_INDICATOR VARCHAR2 DEFAULT NULL, 
+    P_MODELTYPE VARCHAR2 DEFAULT NULL,
+    P_TIME_STEP_DESCRIPTOR VARCHAR2 DEFAULT NULL, 
+    P_CMMNT VARCHAR2 DEFAULT G_DEFAULT_CMMNT)
+  IS
+      /* the local variables         */
+      procedure_indicator varchar2(100);
+      
+ BEGIN
+ /*  This procedure was written to assist in the ENSEMBLE processing to create a record in HDB
+    in table REF_MODEL_RUN so that the unique representation of a MODEL_RUN_NAME,MODEL_ID,RUN_DATE 
+    to a model_run_id can be represented.
+    
+    this procedure written by Mark Bogner   January 2013
+ */
+
+  procedure_indicator := 'MODEL_RUN_ID Create FAILED FOR: ';
+
+ /*  first do error checking  */
+    IF P_MODEL_RUN_NAME IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> MODEL_RUN_NAME');
+	ELSIF P_MODEL_ID IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> MODEL_ID');
+	ELSIF P_RUN_DATE IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> RUN DATE');
+	ELSIF P_MODEL_ID < 1 THEN 
+		DENY_ACTION(procedure_indicator || 'NEGATIVE or ZERO MODEL_ID');
+    END IF;
+
+	/*  do the insert */
+    BEGIN
+       insert into REF_MODEL_RUN RMR
+       (RMR.MODEL_RUN_ID,RMR.MODEL_RUN_NAME,RMR.MODEL_ID,RMR.RUN_DATE,RMR.EXTRA_KEYS_Y_N,RMR.START_DATE,
+        RMR.END_DATE,RMR.HYDROLOGIC_INDICATOR,RMR.MODELTYPE,RMR.TIME_STEP_DESCRIPTOR,RMR.CMMNT)
+        values
+        (-1,P_MODEL_RUN_NAME,P_MODEL_ID,P_RUN_DATE,P_EXTRA_KEYS_Y_N,P_START_DATE,P_END_DATE,
+         P_HYDROLOGIC_INDICATOR,P_MODELTYPE,P_TIME_STEP_DESCRIPTOR,P_CMMNT);
+    END;
+			
+END; /*  create_model_run_id procedure  */
+
+PROCEDURE GET_TSTOOL_ENSEMBLE_MRI (
+  OP_MODEL_RUN_ID OUT NUMBER,
+  P_ENSEMBLE_NAME VARCHAR2,
+  P_TRACE_NUMBER NUMBER,
+  P_MODEL_NAME VARCHAR2,
+  P_RUN_DATE DATE DEFAULT sysdate, 
+  P_IS_RUNDATE_KEY VARCHAR2 DEFAULT 'N',
+  P_AGEN_ID NUMBER DEFAULT NULL)
+IS
+      /* the local variables         */
+      procedure_indicator varchar2(100):= 'GET_TSTOOL_ENSEMBLE_MRI FAILED FOR: ';
+      l_run_date DATE;
+      l_model_run_name REF_MODEL_RUN.MODEL_RUN_NAME%TYPE;
+      
+ BEGIN
+ /*  This procedure was written to assist in the ENSEMBLE processing of TsTool to: 
+    
+    1. return a model_run_id for the specified TsTool input parameters 
+    2. apply a business rule: run_date in REF_MODEL_RUN for TsTool is truncated to the minute
+       (this is a modified business rule from the original since it was originally intended to
+        be truncated at the hour)
+    3. apply a business rule: the model_run_name for any new REF_MODEL_RUN records will
+       be a concatenation of the P_ENSEMBLE with the P_TRACE_NUMBER (up to 9999)
+    --4. create a HDB_Model record if the P_MODEL_NAME doesn't already exist
+    -- # 4 business rule modified per March 25 2013 meeting agreement
+    4. Abort the procedure if the P_MODEL_NAME doesn't already exist
+    5. create a REF_ENSEMBLE record if the P_ENSEMBLE_NAME doesn't already exist
+    6. create a REF_ENSEMBLE_TRACE record if that combination of input parameters to a 
+       particular model_run_id record does not already exist
+    7. create a REF_MODEL_RUN record if the above business rules and input parameters 
+       dictate that necessity
+    8. Business rule: P_MODEL_NAME can not be NULL
+    9. Business rule: P_ENSEMBLE_NAME can not be NULL
+   10. Business rule: P_TRACE_NUMBER can not be NULL
+   11. Business rule: P_IS_RUNDATE_KEY must be a "Y" or "N"
+   12. Business rule: If using Run_DATE as part of the key, it must be a valid date and not NULL
+   --13. Any use of P_RUN_DATE utilizes the truncation to the hour (minutes and seconds do not apply here)
+   13. Any use of P_RUN_DATE utilizes the truncation to the minute (modified 03262013)
+   14. Multiple runs of a single ensemble and trace can be stored if the Run_date is key specified
+   15. HYDROLOGIC_INDICATOR column will be populated with the character representation of the trace number when
+       a ref_model_run record is created
+   16. A REF_ENSEMBLE_TRACE record must have either one of the trace_numeric or the trace_name populated.
+   17. For TsTool ensembles, populate both trace_id and trace_numeric with the P_TRACE_NUMBER value
+   18. Set AGEN_ID in the REF_ENSEMBLE table if known, otherwise default to NULL
+   
+    This procedure applies business rules specifically designed for the TsTool application interface
+    to HDB as it pertains to Ensemble data table storage.  These business rules were not designed for 
+    generic use of the Ensemble and model tables, or coordinated models so caution should be given to
+    anyone who wishes to use this package and specifially this procedure if the use is not directly 
+    affiliated with the Tstool application.
+    
+    this procedure written by Mark Bogner   January 2013
+    modified by M. Bogner March 26 2013 for modified business rules 2,13,15,16,17
+    modified by M. Bogner April 15 2014 for new  business rule 18
+ */
+
+ /*  first do error checking  */
+    IF P_MODEL_NAME IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> MODEL_NAME');
+	ELSIF P_ENSEMBLE_NAME IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> ENSEMBLE_NAME');
+	ELSIF P_TRACE_NUMBER IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> TRACE_NUMBER');
+	ELSIF P_IS_RUNDATE_KEY <> 'Y' AND P_IS_RUNDATE_KEY <> 'N' THEN 
+		DENY_ACTION(procedure_indicator || 'Invalid P_IS_RUNDATE_KEY: '|| P_IS_RUNDATE_KEY);
+	ELSIF P_RUN_DATE IS NULL AND P_IS_RUNDATE_KEY = 'Y' THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> RUN_DATE');
+    END IF;
+
+	/*  do the necessary processing to get the existing model_run_id or create all the necessary
+        records in the appropriate tables to accomplish objective (#1 in the comments above)
+	*/
+    BEGIN
+  
+    /* truncate the run_date to the hour:  Business rule  # 13  */
+    --l_run_date := TRUNC(P_RUN_DATE,'HH24');  Removed and modified by M. Bogner 03-26-2013
+    /* truncate the run_date to the minute:  Business rule  # 13  */
+    l_run_date := TRUNC(P_RUN_DATE,'MI');
+    /* formulate the model_run_name from the ensemble name and trace #  :  Business rule # 3  */
+    l_model_run_name := substr(P_ENSEMBLE_NAME,1,60) || substr(to_char(10000+P_TRACE_NUMBER),2,4);
+    /* get the model_id using the input parameter P_MODEL_NAME  */
+
+     G_MODEL_ID := GET_MODEL_ID(P_MODEL_NAME);
+     IF G_MODEL_ID < 0 THEN
+     	 -- Modified by M. Bogner 26-March-2013 for new business rule # 4
+     	 -- this procedure will not create a new hdb_model record as previously coded
+     	 DENY_ACTION(procedure_indicator || ' Non-existent MODEL_NAME: '|| P_MODEL_NAME);
+     --  /* the model doesn't exist yet, so create the Model:  Business rule # 4  */
+     --  CREATE_MODEL(P_MODEL_NAME);
+     --  G_MODEL_ID := GET_MODEL_ID(P_MODEL_NAME);
+     END IF;
+
+    /* get the ensemble_id using the input parameter P_ENSEMBLE_NAME  */
+     G_ENSEMBLE_ID := GET_ENSEMBLE_ID(P_ENSEMBLE_NAME);    
+     IF G_ENSEMBLE_ID < 0 THEN
+       /* the ENSEMBLE NAME doesn't exist yet, so create the ENSEMBLE:  Business rule # 5, 18  */
+       CREATE_ENSEMBLE(P_ENSEMBLE_NAME,P_AGEN_ID);
+       G_ENSEMBLE_ID := GET_ENSEMBLE_ID(P_ENSEMBLE_NAME);
+     END IF;
+   
+     /* see if the records exist for the combination of input parameters */
+	 G_MODEL_RUN_ID := GET_ENSEMBLE_MRI(G_ENSEMBLE_ID, P_TRACE_NUMBER, G_MODEL_ID,l_model_run_name,
+	                    l_run_date,P_IS_RUNDATE_KEY);		
+
+     IF G_MODEL_RUN_ID > 0 THEN
+       IF P_IS_RUNDATE_KEY = 'N' THEN
+        /* this is a new run of existing ensemble, so update the run_date on the ref_model_run table  */
+        update REF_MODEL_RUN set run_date=l_run_date where model_run_ID = G_MODEL_RUN_ID;
+       END IF;
+     ELSE
+       /* the records don't exist so create new REF_MODEL_RUN and REF_ENSEMBLE_TRACE RECORDS  */
+       /* create the REF_MODEL_RUN record */
+       --CREATE_MODEL_RUN(l_model_run_name,G_MODEL_ID,l_run_date);
+       /* modified by M. Bogner 0326201 for new business rule 15  */
+       /* modified by A. Gilmore 102013 to provide 'N' extra_keys_y_n, as null cannot be used */
+       CREATE_MODEL_RUN(l_model_run_name,G_MODEL_ID,l_run_date,'N',NULL,NULL,TO_CHAR(P_TRACE_NUMBER) );
+       /* get the newly create model_run_id  */
+       G_MODEL_RUN_ID := GET_MODEL_RUN_ID(G_MODEL_ID,l_model_run_name,l_run_date,'Y');
+       /* create the REF_ENSEMBLE_TRACE record  */
+       --CREATE_ENSEMBLE_TRACE(G_ENSEMBLE_ID, P_TRACE_NUMBER, NULL, NULL, G_MODEL_RUN_ID);
+       /* modified by M. Bogner 0326201 for new business rule 17  */
+       CREATE_ENSEMBLE_TRACE(G_ENSEMBLE_ID, P_TRACE_NUMBER, P_TRACE_NUMBER, NULL, G_MODEL_RUN_ID);
+     END IF;
+
+     /* the model_run_id should have already been determined or newly created so set the
+        output parameter and exit the procedure                                       
+     */
+	 OP_MODEL_RUN_ID := G_MODEL_RUN_ID;
+	 
+	END;
+	
+END; /*  GET_TSTOOL_ENSEMBLE_MRI procedure  */
+
+
+END ENSEMBLE;  /* Package End  */
+
+.
+/

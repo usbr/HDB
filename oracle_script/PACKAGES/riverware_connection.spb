@@ -1,0 +1,2053 @@
+CREATE OR REPLACE PACKAGE BODY RIVERWARE_CONNECTION as
+ 
+	procedure read_model_data(  
+		interval		HDB_INTERVAL.INTERVAL_NAME%TYPE,
+		sdi_number		REF_EXT_SITE_DATA_MAP.HDB_SITE_DATATYPE_ID%TYPE,
+		run_id			REF_MODEL_RUN.MODEL_RUN_ID%TYPE,
+		start_of_time	DATE,
+		begin_date		R_BASE.START_DATE_TIME%TYPE,
+		end_date		R_BASE.START_DATE_TIME%TYPE,
+		date_array	OUT	numberTable,
+		value_array	OUT	numberTable) is
+
+		CURSOR C_HOUR (mri IN NUMBER, sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((start_date_time - sot + 1/24) * spd ), value from m_hour
+		where model_run_id = mri and site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_DAY (mri IN NUMBER, sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((start_date_time - sot + 1) * spd ), value from m_day
+		where  model_run_id = mri and site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_MONTH (mri IN NUMBER, sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,1) - sot) * spd ), value from m_month
+		where  model_run_id = mri and site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_YEAR (mri IN NUMBER, sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,12) - sot) * spd ), value from m_year
+		where  model_run_id = mri and site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_WY (mri IN NUMBER, sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,12) - sot) * spd ), value from m_wy
+		where  model_run_id = mri and site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+	
+	/*
+	  Procedure read_model_data reads HDB data from the "model" tables based on the input parameters
+	  Riverware expects the dates in seconds since it's start of time for that model. Hence, the 
+	  calulations on HDB dates is : start_date_time minus the Riverware beginning of time multiplied
+	  by the number of seconds per day.  Also since riverware expects the dates to be at the end of 
+	  period, we must add an interval of time to the start_date_time for each period.
+	  
+	 Initial Programming  by M. Bogner     April 2007
+	 Modified April 25 by M. Bogner to have cursors return data ordered by start_date_time
+	*/
+	 
+	 /* first declare all the temporary variables needed for this procedure   */
+	 BEGIN	 
+	 
+	  IF interval = 'hour' THEN
+		OPEN C_HOUR(run_id,sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_HOUR BULK COLLECT into date_array, value_array;
+		CLOSE C_HOUR;
+	  ELSIF interval = 'day' THEN
+		OPEN C_DAY(run_id,sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_DAY BULK COLLECT into date_array, value_array;
+		CLOSE C_DAY;
+	  ELSIF interval = 'month' THEN
+		OPEN C_MONTH(run_id,sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_MONTH BULK COLLECT into date_array, value_array;
+		CLOSE C_MONTH;
+	  ELSIF interval = 'year' THEN
+		OPEN C_YEAR(run_id,sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_YEAR BULK COLLECT into date_array, value_array;
+		CLOSE C_YEAR;
+	  ELSIF interval = 'wy' THEN
+		OPEN C_WY(run_id,sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_WY BULK COLLECT into date_array, value_array;
+		CLOSE C_WY;
+	  END IF;
+	end read_model_data;  /* end of the read model data procedure  */	
+
+
+ 
+	procedure read_real_data(  
+		interval		HDB_INTERVAL.INTERVAL_NAME%TYPE,
+		sdi_number		REF_EXT_SITE_DATA_MAP.HDB_SITE_DATATYPE_ID%TYPE,
+		start_of_time	DATE,
+		begin_date		R_BASE.START_DATE_TIME%TYPE,
+		end_date		R_BASE.START_DATE_TIME%TYPE,
+		timestep        NUMBER,
+		date_array	OUT	numberTable,
+		value_array	OUT	numberTable) is
+
+		CURSOR C_HOUR (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((start_date_time - sot + 1/24) * spd ), value from r_hour
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_DAY (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((start_date_time - sot + 1) * spd ), value from r_day
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_MONTH (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,1) - sot) * spd ), value from r_month
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_YEAR (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,12) - sot) * spd ), value from r_year
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_WY (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,12) - sot) * spd ), value from r_wy
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+	
+		/* c_other is not so well defined.  It will be hard to determine the end of period */
+		/* so this code needs to be looked at if r_other starts being used but we will use the end_date 
+		   time as a start to see if this works for folks.  timestep will be expected to be in days     */
+		CURSOR C_OTHER (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER, timestep IN NUMBER) IS
+		select round((end_date_time - sot) * spd ), value from r_other
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		and end_date_time - start_date_time = timestep
+		order by start_date_time; 
+	
+	/*
+	  Procedure read_real_data reads HDB data from the "real" tables based on the input parameters
+	  Riverware expects the dates in seconds since it's start of time for that model. Hence, the 
+	  calulations on HDB dates is : start_date_time minus the Riverware beginning of time multiplied
+	  by the number of seconds per day.  Also since riverware expects the dates to be at the end of 
+	  period, we must add an interval of time to the start_date_time for each period.
+	  
+	 Initial Programming  by M. Bogner     April 2007
+	 Modified April 25 by M. Bogner to have cursors return data ordered by start_date_time
+	*/
+	 
+	 /* first declare all the temporary variables needed for this procedure  */
+	 BEGIN	 
+	 
+	  IF interval = 'hour' THEN
+		OPEN C_HOUR(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_HOUR BULK COLLECT into date_array, value_array;
+		CLOSE C_HOUR;
+	  ELSIF interval = 'day' THEN
+		OPEN C_DAY(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_DAY BULK COLLECT into date_array, value_array;
+		CLOSE C_DAY;
+	  ELSIF interval = 'month' THEN
+		OPEN C_MONTH(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_MONTH BULK COLLECT into date_array, value_array;
+		CLOSE C_MONTH;
+	  ELSIF interval = 'year' THEN
+		OPEN C_YEAR(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_YEAR BULK COLLECT into date_array, value_array;
+		CLOSE C_YEAR;
+	  ELSIF interval = 'wy' THEN
+		OPEN C_WY(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_WY BULK COLLECT into date_array, value_array;
+		CLOSE C_WY;
+	  ELSIF interval = 'other' THEN
+		OPEN C_OTHER(sdi_number,start_of_time,begin_date,end_date,seconds_per_day,timestep);
+		FETCH C_OTHER BULK COLLECT into date_array, value_array;
+		CLOSE C_OTHER;
+	  END IF;
+	end read_real_data;  /* end of the read real data procedure  */	
+
+ 	procedure read_real_data_flag(  
+		interval		HDB_INTERVAL.INTERVAL_NAME%TYPE,
+		sdi_number		REF_EXT_SITE_DATA_MAP.HDB_SITE_DATATYPE_ID%TYPE,
+		start_of_time	DATE,
+		begin_date		R_BASE.START_DATE_TIME%TYPE,
+		end_date		  R_BASE.START_DATE_TIME%TYPE,
+		timestep        NUMBER,
+		date_array	OUT	numberTable,
+		value_array	OUT	numberTable,
+    flag_array	OUT	charTable) is
+
+		CURSOR C_HOUR (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((start_date_time - sot + 1/24) * spd ), value, validation from r_hour
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_DAY (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((start_date_time - sot + 1) * spd ), value, validation from r_day
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_MONTH (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,1) - sot) * spd ), value, validation from r_month
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_YEAR (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,12) - sot) * spd ), value, validation from r_year
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+
+		CURSOR C_WY (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER) IS
+		select round((add_months(start_date_time,12) - sot) * spd ), value, validation from r_wy
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		order by start_date_time; 
+	
+		/* c_other is not so well defined.  It will be hard to determine the end of period */
+		/* so this code needs to be looked at if r_other starts being used but we will use the end_date 
+		   time as a start to see if this works for folks.  timestep will be expected to be in days     */
+		CURSOR C_OTHER (sdi in NUMBER, sot IN DATE, start_date IN DATE, end_date IN DATE, spd IN NUMBER, timestep IN NUMBER) IS
+		select round((end_date_time - sot) * spd ), value, validation from r_other
+		where site_datatype_id = sdi and start_date_time >= start_date and start_date_time <= end_date
+		and end_date_time - start_date_time = timestep
+		order by start_date_time; 
+	
+	/*
+	  Procedure read_real_data reads HDB data from the "real" tables based on the input parameters
+	  Riverware expects the dates in seconds since it's start of time for that model. Hence, the 
+	  calulations on HDB dates is : start_date_time minus the Riverware beginning of time multiplied
+	  by the number of seconds per day.  Also since riverware expects the dates to be at the end of 
+	  period, we must add an interval of time to the start_date_time for each period.
+	  
+	 Initial Programming  by M. Bogner     April 2007
+	 Modified April 25 by M. Bogner to have cursors return data ordered by start_date_time
+   Modified by IsmailO March 16 2017 to add Validation column with  read_db_data_flag_to_riverware and read_real_data_flag
+	*/
+	 
+	 /* first declare all the temporary variables needed for this procedure  */
+	 BEGIN	 
+	 
+	  IF interval = 'hour' THEN
+		OPEN C_HOUR(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_HOUR BULK COLLECT into date_array, value_array, flag_array;
+		CLOSE C_HOUR;
+	  ELSIF interval = 'day' THEN
+		OPEN C_DAY(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_DAY BULK COLLECT into date_array, value_array, flag_array;
+		CLOSE C_DAY;
+	  ELSIF interval = 'month' THEN
+		OPEN C_MONTH(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_MONTH BULK COLLECT into date_array, value_array, flag_array;
+		CLOSE C_MONTH;
+	  ELSIF interval = 'year' THEN
+		OPEN C_YEAR(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_YEAR BULK COLLECT into date_array, value_array, flag_array;
+		CLOSE C_YEAR;
+	  ELSIF interval = 'wy' THEN
+		OPEN C_WY(sdi_number,start_of_time,begin_date,end_date,seconds_per_day);
+		FETCH C_WY BULK COLLECT into date_array, value_array, flag_array;
+		CLOSE C_WY;
+	  ELSIF interval = 'other' THEN
+		OPEN C_OTHER(sdi_number,start_of_time,begin_date,end_date,seconds_per_day,timestep);
+		FETCH C_OTHER BULK COLLECT into date_array, value_array, flag_array;
+		CLOSE C_OTHER;
+	  END IF;
+	end read_real_data_flag;  /* end of the read real data flag procedure  */	
+ 
+	function set_hdb_date (date_in_seconds NUMBER, timesteps NUMBER, interval_name varchar2, date_indicator varchar2) RETURN DATE is
+	/*  
+		function set_hdb_date takes the Riverware date in seconds information received from 
+		riverware and converts it to a proper HDB date.  Riverware reports dates at the end  
+		of period while HDB is at the beginning of period so some date math is necessary.
+	  
+	 Initial Programming  by M. Bogner     April 2007
+	*/
+	
+	riverware_timestep	VARCHAR2(20);
+	return_date DATE;
+	
+	BEGIN
+	 /* set up the riverware timestep and calulate the date value from the beginning of time variable  */
+	 riverware_timestep := to_char(timesteps) || lower(interval_name);
+	 return_date := curr_start_of_time + date_in_seconds/seconds_per_day;
+	 
+	 IF riverware_timestep = '1water year' AND date_indicator = 'edt' THEN
+	   return_date := add_months(return_date,-3); /* subtract 3 months */
+	 END IF;
+	 
+	 IF date_indicator = 'sdt' THEN 
+		/* now test the intervals and set start date to beginning of interval  */
+		IF riverware_timestep = '1hour' then return_date := return_date - 1/24 ; /* subtract 1 hour  */
+		  ELSIF riverware_timestep = '6hour' then return_date := return_date - 6/24 ; /* subtract 6 hours  */
+		  ELSIF riverware_timestep = '12hour' then return_date := return_date - 12/24 ; /* subtract 12 hours  */
+		  ELSIF riverware_timestep = '1day' then return_date := return_date - 1; /* subtract 1 day */
+		  ELSIF riverware_timestep = '1week' then return_date := return_date - 7 ; /* subtract 7 days */
+		  ELSIF riverware_timestep = '1month' then return_date := add_months(return_date,-1); /* subtract 1 month */
+		  ELSIF riverware_timestep = '1year' then return_date := add_months(return_date,-12); /* subtract 1 year */
+		  ELSIF riverware_timestep = '1water year' then return_date := add_months(return_date,-15); /* subtract 15 months */
+		END IF;
+	 END IF;
+	 /* now just return the return date */
+	 /* note: this function purposely just returns the default date back if no matching
+	    timestep and interval match                                                      */
+	 return(return_date);
+	  
+	END set_hdb_date;  /* end of set_hdb_date function  */
+	
+	
+	
+	function set_hdb_timestep (timesteps NUMBER, interval_name varchar2) RETURN VARCHAR2 is
+	/*  
+		function set_hdb_timestep takes the timestep information received from 
+		riverware and converts it to a number in days the interval represents.
+		
+		0 is returned if it doesn't match anything HDB know about
+		This function was created mainlt to determine the interval time betweem the odd
+		intervals that HDB doesn't have a table for like week, 6 and 12 hour intervals
+		that we will attempt to put into the r_other table 
+	  
+	 Initial Programming  by M. Bogner     April 2007
+	*/
+	
+	riverware_timestep	VARCHAR2(20);
+	timestep NUMBER;  /* the approximate time in days that the interval represents  */       
+	BEGIN
+	 riverware_timestep := to_char(timesteps) || lower(interval_name);
+	 timestep := 0;
+	 /* now test the intervals  */
+	 IF riverware_timestep = '1hour' then timestep := 1/24;
+	 ELSIF riverware_timestep = '6hour' then timestep := 6/24;
+	 ELSIF riverware_timestep = '12hour' then timestep := 12/24;
+	 ELSIF riverware_timestep = '1day' then timestep := 1;
+	 ELSIF riverware_timestep = '1week' then timestep := 7;
+	 ELSIF riverware_timestep = '1month' then timestep := 30;
+	 ELSIF riverware_timestep = '1year' then timestep := 365;
+	 ELSIF riverware_timestep = '1water year' then timestep := 365;
+	 END IF;
+	 /* now just return the interval */
+	 return(timestep);
+	  
+	END set_hdb_timestep;  /* end of set_hdb_timestep function  */
+ 
+	function set_hdb_interval (timesteps NUMBER, interval_name varchar2) RETURN VARCHAR2 is
+	/*  
+		function set_hdb_interval takes the timestep information received from 
+		riverware and converts it to a proper HDB interval.
+		
+		'NONE' is returned if it doesn't match anything HDB know about
+	  
+	 Initial Programming  by M. Bogner     March 2007
+	*/
+	
+	riverware_timestep	VARCHAR2(20);
+	interval			HDB_INTERVAL.INTERVAL_NAME%TYPE;       
+	BEGIN
+	 riverware_timestep := to_char(timesteps) || lower(interval_name);
+	 interval := 'NONE';
+	 /* now test the intervals  */
+	 IF riverware_timestep = '1hour' then interval := 'hour';
+	 ELSIF riverware_timestep = '6hour' then interval := 'other';
+	 ELSIF riverware_timestep = '12hour' then interval := 'other';
+	 ELSIF riverware_timestep = '1day' then interval := 'day';
+	 ELSIF riverware_timestep = '1week' then interval := 'other';
+	 ELSIF riverware_timestep = '1month' then interval := 'month';
+	 ELSIF riverware_timestep = '1year' then interval := 'year';
+	 ELSIF riverware_timestep = '1water year' then interval := 'wy';
+	 END IF;
+	 /* now just return the interval */
+	 return(interval);
+	  
+	END set_hdb_interval;  /* end of set_hdb_interval function  */
+	
+
+	procedure get_site_riverware_map (
+	  ext_data_source_id_in     HDB_EXT_DATA_SOURCE.EXT_DATA_SOURCE_ID%TYPE,
+	  riverware_object_name	    REF_EXT_SITE_DATA_MAP.PRIMARY_SITE_CODE%TYPE,
+	  riverware_slot_name	    REF_EXT_SITE_DATA_MAP.PRIMARY_DATA_CODE%TYPE,
+	  site_datatype_id_out  OUT REF_EXT_SITE_DATA_MAP.HDB_SITE_DATATYPE_ID%TYPE) is
+
+        /* procedure get_site_riverware_map is a second chance mapping strategy
+           when the site_data_map lookup fails to find any sdis
+           
+           The concept is that the RiverWare slot names are mapped to 
+           their 'normal' hdb datatypes.
+           
+           The RiverWare object names are mapped first using the ext_data_source_id
+           selected ext_site_code_sys_id, and if that fails to find any,
+           just find any site_code that matches.
+           
+           The SDI is just found via a selection from hdb_site_datatype.
+           
+           Initial Programming: Andrew Gilmore, April 2008
+           */
+
+        begin              
+          select site_datatype_id
+          into site_datatype_id_out
+          from hdb_ext_data_code data, hdb_ext_data_code_sys datasys, 
+               hdb_ext_site_code sites, hdb_ext_data_source source,
+               hdb_site_datatype sdis
+          where datasys.ext_data_code_sys_name = 'RiverWare slot names'
+            and data.ext_data_code_sys_id = datasys.ext_data_code_sys_id
+            and data.primary_data_code = riverware_slot_name 
+            and source.ext_site_code_sys_id = sites.ext_site_code_sys_id
+            and source.ext_data_source_id = ext_data_source_id_in
+            and sites.primary_site_code = riverware_object_name 
+            and sdis.datatype_id = data.hdb_datatype_id 
+            and sdis.site_id = sites.hdb_site_id;
+
+          /* if the above query fails to find any sdis, 
+             then try with no limitations to site coding system
+             (do not join with data_source table to get site_code_sys_id
+             
+             This provides the maximal flexibility. If more than one site_id
+             is found, we cannot provide a mapping.
+             */
+          exception when no_data_found then
+          begin
+            select distinct site_datatype_id
+            into site_datatype_id_out
+            from hdb_ext_data_code data, hdb_ext_data_code_sys datasys, 
+                 hdb_ext_site_code sites, hdb_site_datatype sdis
+            where datasys.ext_data_code_sys_name = 'RiverWare slot names'
+              and data.ext_data_code_sys_id = datasys.ext_data_code_sys_id
+              and data.primary_data_code = riverware_slot_name 
+              and sites.primary_site_code = riverware_object_name 
+              and sdis.datatype_id = data.hdb_datatype_id 
+              and sdis.site_id = sites.hdb_site_id;
+
+            exception
+              when no_data_found then /* We have failed! */
+                deny_action('No active mappings found in any mapping, with source='||ext_data_source_id_in||', site='||riverware_object_name||', data='||riverware_slot_name);
+              when TOO_MANY_ROWS then /* hdb_ext_site has more than one possible site for this site_code */
+                deny_action('More than one mapping found, probably more than one site in hdb_ext_site_code with site='||riverware_object_name);
+          end;
+	end get_site_riverware_map;
+
+
+	procedure get_riverware_sdi(  
+	  ext_data_source_id    HDB_EXT_DATA_SOURCE.EXT_DATA_SOURCE_ID%TYPE,
+	  riverware_object_name	REF_EXT_SITE_DATA_MAP.PRIMARY_SITE_CODE%TYPE,
+	  riverware_slot_name	REF_EXT_SITE_DATA_MAP.PRIMARY_DATA_CODE%TYPE,
+	  site_datatype_id  OUT REF_EXT_SITE_DATA_MAP.HDB_SITE_DATATYPE_ID%TYPE) is
+
+	/*  
+		procedure get_riverware_sdi only looks up the the SDI for a object 
+		and slot name  and returns the sdi
+	  
+	 Initial Programming  by M. Bogner     March 2007
+	 Modified by Andrew Gilmore, April 2008	to provide more flexible mapping
+	*/
+	
+	/* first declare the temporary variables needed for proc calls  and etc... */
+	method_id   HDB_METHOD.METHOD_ID%TYPE;
+	computation_id HDB_COMPUTED_DATATYPE.COMPUTATION_ID%TYPE;
+	interval    R_BASE.INTERVAL%TYPE;
+	agency_id   HDB_AGEN.AGEN_ID%TYPE;
+	  
+	BEGIN
+		/* go get the sdi for this mapping                */
+		get_site_data_map(ext_data_source_id,riverware_object_name,riverware_slot_name,0,
+			site_datatype_id,interval,method_id,computation_id,agency_id,null,null);
+	EXCEPTION 
+	when others THEN /* Specific site/data code to site_datatype_id mapping failed */
+		if SQLCODE = -20001 and
+		SQLERRM LIKE '%No active mappings%' then /* failed because no mapping */
+			/* try separate site, riverware slot name mapping */
+			get_site_riverware_map(ext_data_source_id,riverware_object_name,
+				riverware_slot_name, site_datatype_id);
+		else
+			raise; /* do not handle exception, just raise it again */
+		end if;
+	end get_riverware_sdi;
+	
+	procedure validate_ensemble(  
+		p_ensemble_id	NUMBER,
+		p_proc_abbr   VARCHAR2  ) is
+		
+	/*
+	  Procedure validate_ensemble checks that the parameter p_ensemble_id is a legitimate value defined 
+	  in the database.  Any failure of the checks is an exception error with an 
+	  appropriate message
+	 
+	 Initial Programming  by M. Bogner     January 2014
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 l_key  NUMBER;
+	 BEGIN	 
+	    select ensemble_id into l_key from REF_ENSEMBLE where ensemble_id = P_ENSEMBLE_ID;
+		EXCEPTION when OTHERS  THEN DENY_ACTION('Invalid ENSEMBLE_ID: '||
+		  nvl(to_char(p_ensemble_id),'<<NULL>>')||' PROC: '|| p_proc_abbr);
+	end validate_ensemble;	
+	
+	
+	procedure validate_ensemble_trace(  
+		p_ensemble_id	NUMBER,
+		p_trace_id	NUMBER,
+		p_proc_abbr   VARCHAR2  ) is
+		
+	/*
+	  Procedure validate_ensemble checks that the parameter p_trace_id is a legitimate value defined 
+	  in the database.  Any failure of the checks is an exception error with an 
+	  appropriate message
+	 
+	 Initial Programming  by M. Bogner     January 2014
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 l_key  NUMBER;
+	 BEGIN	 
+	    select trace_id into l_key from REF_ENSEMBLE_TRACE  
+	    where ensemble_id = P_ENSEMBLE_ID and trace_id = P_TRACE_ID;
+		EXCEPTION when OTHERS  THEN DENY_ACTION('Invalid TRACE_ID: '||
+		  nvl(to_char(p_trace_id),'<<NULL>>')||' PROC: '|| p_proc_abbr);
+	end validate_ensemble_trace;	
+	
+	procedure validate_data_source(  
+		source_id	HDB_EXT_DATA_SOURCE.EXT_DATA_SOURCE_ID%TYPE,
+		proc_abbr   varchar2  ) is
+		
+	/*
+	  Procedure validate_data_source checks that the mapping
+	  id is a legitimate value defined in the database.  Any failure of the checks is an 
+	  exception error  with an appropriate message
+	 
+	 Initial Programming  by M. Bogner     March 2007
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 temp_num  NUMBER;
+	 BEGIN
+	 
+		begin
+		/*  now check the data source number  */
+		    select ext_data_source_id into temp_num 
+		    from hdb_ext_data_source where ext_data_source_id = source_id;
+		    
+			EXCEPTION
+			when OTHERS  THEN DENY_ACTION('Invalid Data Source Identifier: '||
+			nvl(to_char(source_id),'<<NULL>>')||'  PROC: '|| proc_abbr);
+		end; /* check source_id code */
+		
+	end validate_data_source;	
+	
+	procedure validate_agency(  
+		agency_id	HDB_AGEN.AGEN_ID%TYPE,
+		proc_abbr   varchar2  ) is
+		
+	/*
+	  Procedure validate_agency checks that the agency_id is a legitimate value defined 
+	  in the database.  Any failure of the checks is an exception error with an 
+	  appropriate message
+	 
+	 Initial Programming  by M. Bogner     March 2007
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 temp_num  NUMBER;
+	 BEGIN	 
+		/*  now check the agency number  */
+		    select agen_id into temp_num from hdb_agen where agen_id = agency_id;
+		    
+			EXCEPTION
+			when OTHERS  THEN DENY_ACTION('Invalid Agency Identifier: '||
+			nvl(to_char(agency_id),'<<NULL>>')||' PROC: '|| proc_abbr);
+	end validate_agency;	
+	
+	
+	procedure validate_collection_system(  
+		collection_id	HDB_COLLECTION_SYSTEM.COLLECTION_SYSTEM_ID%TYPE,
+		proc_abbr   varchar2  ) is
+		
+	/*
+	  Procedure validate_collection_system checks that the collection_id is a legitimate value defined 
+	  in the database.  Any failure of the checks is an exception error with an 
+	  appropriate message
+	 
+	 Initial Programming  by M. Bogner     March 2007
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 temp_num  NUMBER;
+	 BEGIN	 
+		/*  now check the collection system id  */
+		  select collection_system_id into temp_num 
+		  from hdb_collection_system where collection_system_id = collection_id;
+		
+		EXCEPTION
+		when OTHERS  THEN DENY_ACTION('Invalid Collection System Identifier: '||
+		nvl(to_char(collection_id),'<<NULL>>')||' PROC: '|| proc_abbr);
+     end validate_collection_system;	
+	
+	procedure validate_model_run(  
+		run_id		REF_MODEL_RUN.MODEL_RUN_ID%TYPE,
+		proc_abbr   varchar2  ) is
+		
+	/*
+	  Procedure validate_model_run checks that the run_id is a legitimate 
+	  model_run_id value from the REF_MODEL_RUN table 
+	  in the database.  Any failure of the checks is an exception error with an 
+	  appropriate message
+	 
+	 Initial Programming  by M. Bogner     March 2007
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 temp_num  NUMBER;
+	 BEGIN	 
+		/*  now check the model_run_id  */
+		    select model_run_id into temp_num 
+		    from ref_model_run where model_run_id = run_id;
+		    
+			EXCEPTION
+			when OTHERS  THEN DENY_ACTION('Invalid Model Run Number: '||
+			nvl(to_char(run_id),'<<NULL>>')||' PROC: '|| proc_abbr);
+	end validate_model_run;	
+
+	procedure model_run_id_actions (
+		run_id		REF_MODEL_RUN.MODEL_RUN_ID%TYPE,
+		proc_abbr   varchar2  ) is
+	
+	begin			
+-- Commented out writing values to temp_test  Daren Critelli March 2015
+--			/* now delete all the previous model_run_id data from the model tables  */
+--			insert into temp_test values ('Action call for DELETING MRI: ' || to_char(run_id) || '  ' 
+--			|| to_char(sysdate,'dd-mon-yyyy HH24:mi:ss'));
+--			commit;
+			begin
+				delete from m_hour where model_run_id = run_id;
+				delete from m_day where model_run_id = run_id;
+				delete from m_month where model_run_id = run_id;
+				delete from m_year where model_run_id = run_id;
+				delete from m_wy where model_run_id = run_id;
+				commit;
+							    
+				EXCEPTION
+				when OTHERS  THEN 
+				DENY_ACTION('Issue Deleting Existing Model data. Model Run Identifier: '||
+				to_char(run_id)|| ' ' || proc_abbr);
+			end ;  /*  end of remove data from the model_tables  */
+	
+	   /* now I think I should touch the model_run_id table to indicate new data coming in */
+	   touch_model_run_id(run_id);
+			
+	end model_run_id_actions;
+	
+	procedure init_riverware_dmi(  
+	  parameter_names  IN stringTable,
+	  parameter_values IN stringTable) is
+		
+	/*
+	  Procedure init_riverware_DMI checks that the input parameters and values are 
+	  legitimate values defined in the database.  Any failure of the checks is an 
+	  exception error  with an appropriate message.  If all checks are OK then all
+	  the model data with that model_run_id are deleted from the model tables
+	 
+	 Initial Programming  by M. Bogner     March 2007
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 items   NUMBER;
+     parameter varchar2(32);
+     
+	 BEGIN
+	    /* first null out the start date time of the model  */
+	    curr_start_of_time := NULL;
+	    /*  now parse the array of parameters  */
+		items := parameter_names.count();
+		For i IN 1..items LOOP	    
+	     parameter := parameter_names(i);
+
+			IF parameter = 'begin_year' then 
+	       	  /* if the begin year parameter set the package curr_start_of_time variable  */
+			  curr_start_of_time := to_date('01-JAN-'||parameter_values(i),'dd-MON-yyyy');  
+			ELSIF parameter = 'model_run_id' THEN
+				 curr_model_run_id := to_number(parameter_values(i));
+    			/*  now check the run_id number  */
+				validate_model_run(curr_model_run_id,'RC.IRDMI');	 
+				model_run_id_actions(curr_model_run_id,'RC.IRDMI');	 
+		    END IF;
+		
+		END  LOOP;
+	end init_riverware_dmi;
+
+	procedure init_riverware_dataset(  
+	  parameter_names  IN stringTable,
+	  parameter_values IN stringTable) is
+
+	/*  
+		procedure init_riverware_dataset is used to set up any and all values needed for
+		the riverware connection program. 
+		
+	 Initial Programming  by M. Bogner     March 2007
+	 Mod by M. Bogner April 2007 to be called by both read, write and delete procedures
+	*/
+
+	 items   NUMBER;
+     parameter varchar2(32);
+     BEGIN
+		/* first null out all potential package values that this procedure can pass */
+     	CURR_DATA_SOURCE_ID := NULL;
+		CURR_AGENCY_ID		:= NULL;
+		CURR_COLLECTION_ID	:= NULL;
+		CURR_OVERWRITE_FLAG := NULL;
+		CURR_MODEL_RUN_ID	:= NULL;
+		CURR_DATA_TABLES    := NULL;
+		CURR_DATA_TYPE		:= NULL;
+
+		items := parameter_names.count();
+		For i IN 1..items LOOP	    
+	     parameter := parameter_names(i);
+
+			IF parameter = 'agency_id' then 
+	       		curr_agency_id := to_number(parameter_values(i));
+				validate_agency(curr_agency_id,'RC.IRDS');
+			ELSIF parameter = 'ext_data_source' THEN
+			/*  now check the data source number  */
+				 curr_data_source_id := to_number(parameter_values(i));
+				 validate_data_source(curr_data_source_id,'RC.IRDS');	 
+			ELSIF parameter = 'collection_system_id' THEN
+				 curr_collection_id := to_number(parameter_values(i));
+    			/*  now check the collection_system_id number  */
+				validate_collection_system(curr_collection_id,'RC.IRDS');	 
+			ELSIF parameter = 'overwrite' AND UPPER(parameter_values(i)) = 'Y' THEN
+				 curr_overwrite_flag := 'O';
+			ELSIF parameter = 'tables' THEN
+				 curr_data_tables := parameter_values(i);
+			ELSIF parameter = 'type' THEN
+				 curr_data_type := parameter_values(i);
+			ELSIF parameter = 'model_run_id' THEN
+				 curr_model_run_id := to_number(parameter_values(i));
+    			/*  now check the model_run_id number  */
+				validate_model_run(curr_model_run_id,'RC.IRDS');
+			ELSIF parameter = 'begin_year' then 
+	       	  /* if the begin year parameter set the package curr_start_of_time variable  */
+			  curr_start_of_time := to_date('01-JAN-'||parameter_values(i),'dd-MON-yyyy');  					 
+		    END IF;
+		
+		END  LOOP;
+	end init_riverware_dataset;
+
+	procedure get_info_for_riverware_slot(  
+	  riverware_object_name	REF_EXT_SITE_DATA_MAP.PRIMARY_SITE_CODE%TYPE,
+	  riverware_slot_name	REF_EXT_SITE_DATA_MAP.PRIMARY_DATA_CODE%TYPE,
+	  parameter_names    stringTable,
+	  parameter_values   stringTable,
+	  output_parameter_names  OUT stringTable,
+	  output_parameter_values OUT stringTable) is
+
+	/*  
+		procedure get_info_for_riverware_slot is used to look up any and all values needed for
+		the riverware connection program.  Presently only looks up the unit and the SDI for a object 
+		and slot name  and returns the unit and the common_name for it
+	  
+	 Initial Programming  by M. Bogner     March 2007
+     Modified April 09 2007  to remove status and return message
+	*/
+	
+	/* first declare the temporary variables needed for proc calls  and etc... */
+	sdi_number  HDB_SITE_DATATYPE.SITE_DATATYPE_ID%TYPE;
+	unit_name   HDB_UNIT.UNIT_COMMON_NAME%TYPE;
+	BEGIN	
+	    /* set all the parameters for this call   */
+	    init_riverware_dataset(parameter_names,parameter_values);
+	    
+		/* validate the external data source identifier  */
+		validate_data_source(curr_data_source_id,'RC.GIFRS');
+		
+		/* next go get the sdi for this mapping                */
+		begin
+		   get_riverware_sdi(curr_data_source_id,riverware_object_name,riverware_slot_name,sdi_number);
+		EXCEPTION
+		when others then
+			raise_application_error(-20003, SQLERRM);
+		end;
+		
+		/* now go get the unit common_name for that sdi   */
+		begin
+			select c.unit_common_name  into unit_name
+			from hdb_site_datatype a, hdb_datatype b,  hdb_unit c
+			where a.site_datatype_id = sdi_number
+			  and a.datatype_id = b.datatype_id
+			  and b.unit_id = c.unit_id;
+
+		EXCEPTION
+		when others then
+			DENY_ACTION('WARNING... Unit Name retrieve failed. SOURCE ID: ' || 
+			to_char(curr_data_source_id) || ' Object: ' || riverware_object_name ||
+			' Slot: ' || riverware_slot_name);
+		end;
+		
+		/* otherwise everything went smoothly so return after setting the unit and unit name value  */
+		output_parameter_names(1) := 'unit';
+		output_parameter_values(1) :=  unit_name;
+		
+	end get_info_for_riverware_slot;
+
+/*	procedure write_riverware_data_to_db writes data to database from Riverware    */  
+	procedure write_riverware_data_to_db(  
+	  riverware_object_name	REF_EXT_SITE_DATA_MAP.PRIMARY_SITE_CODE%TYPE,
+	  riverware_slot_name	REF_EXT_SITE_DATA_MAP.PRIMARY_DATA_CODE%TYPE,
+	  interval_number       NUMBER,
+	  interval_name         VARCHAR2,
+	  date_array            numberTable,
+	  value_array           numberTable,
+	  parameter_names       stringTable,
+	  parameter_values      stringTable) IS
+	/*  
+		procedure write_riverware_data_to_db writes the data passed from Riverware to 
+		the HDB database.  Previously written procedures are called to do the actual
+		database writing.
+		
+	 Initial Programming  by M. Bogner     March 2007
+     Modified April 09 2007  to remove status and return message
+	*/	
+
+    /* declare internal variables */
+ 	sdi_number	HDB_SITE_DATATYPE.SITE_DATATYPE_ID%TYPE;
+	interval	R_BASE.INTERVAL%TYPE;
+    items       NUMBER;
+    sdt			R_BASE.START_DATE_TIME%TYPE;
+    edt			R_BASE.START_DATE_TIME%TYPE;
+    
+	BEGIN /* initial begin for this procedure  */
+	
+	    /* set all the parameters for this call   */
+	    init_riverware_dataset(parameter_names,parameter_values);
+	    
+		/* validate the external data source identifier  */
+		validate_data_source(curr_data_source_id,'RC.WRDTDB');
+		
+		/* next go get the sdi for this mapping                */
+		begin
+		  get_riverware_sdi(curr_data_source_id,riverware_object_name,riverware_slot_name,sdi_number);
+		EXCEPTION
+		when others then
+			raise_application_error(-20003, SQLERRM);
+		end;
+		/* determine the HDB interval pass exception if interval passed back = 'NONE' */
+        interval := set_hdb_interval(interval_number,interval_name); 
+        IF interval = 'NONE' then 
+			DENY_ACTION('Unsupported combination for Timesteps: ' || to_char(interval_number)
+            || '  ' || interval_name);
+		END IF;
+		
+		/* make sure that the start_date _time variable dat has been set  */
+		if curr_start_of_time is null then
+			DENY_ACTION('Start of Riverware Time Date is <<NULL>>');
+		end if;
+		
+		/* validate the setable input variables to HDB stored procedures  */
+		IF curr_data_tables = 'real' then
+		  validate_agency(curr_agency_id,'RC.WRDTB');
+		  validate_collection_system(curr_collection_id,'RC.WRDTB');
+		ELSIF curr_data_tables = 'model' and interval = 'other' then
+			DENY_ACTION('Illegal interval of "OTHER" for WRITING to Model tables');
+		ELSIF curr_data_tables = 'model' then
+		  validate_model_run(curr_model_run_id,'RC.WRDTB');
+		ELSE DENY_ACTION('Illegal value for "tables" parameter of : ' || nvl(curr_data_tables,'<<NULL>>'));
+		END IF;
+
+		begin  /* begin block for HDB stored Procedures exceptions */
+			items := date_array.count();
+			For i IN 1..items LOOP	    
+				sdt := set_hdb_date(date_array(i),interval_number,interval_name,'sdt');	
+				edt := set_hdb_date(date_array(i),interval_number,interval_name,'edt');	
+				IF curr_data_tables = 'real' THEN
+					modify_r_base_raw (sdi_number,interval,sdt,edt,value_array(i),curr_agency_id,
+					curr_overwrite_flag,def_validation,curr_collection_id,def_loading_application_id,
+					def_method_id,def_computation_id,'Y');
+				ELSE
+					modify_m_table_raw(curr_model_run_id,sdi_number,sdt,edt,value_array(i),interval,'Y');
+			    END IF;
+
+			END LOOP;
+		EXCEPTION
+		when others then
+		    rollback;
+			raise_application_error(-20003, SQLERRM);
+		end;  /* end block for HDB stored procedure exception  */	
+		/* the process went smoothly if we got here so do a commit   */
+        COMMIT;
+        
+	END WRITE_RIVERWARE_DATA_TO_DB;  /* end of write_riverware_data_to_db  procedure  */
+
+
+/*	procedure write_rw_group_data_to_db writes group data to database from Riverware    */  
+	procedure write_rw_group_data_to_db(  
+      number_of_grouped_slots NUMBER,
+      riverware_object_names	stringTableCLOB,
+	  riverware_slot_names	stringTableCLOB,
+	  interval_number       NUMBER,
+	  interval_name         VARCHAR2,
+      slot_date_value_counts numberTable,
+	  date_array            numberTable,
+	  value_array           numberTable,
+	  parameter_names       stringTable,
+	  parameter_values      stringTable ) IS
+	/*  
+		procedure write_rw_group_data_to_db writes the group data passed from Riverware to 
+		the HDB database. 		
+  	    Initial Programming  by Ismail O.     December 2017
+  	*/	
+
+    /* declare internal variables */
+ 	sdi_number	HDB_SITE_DATATYPE.SITE_DATATYPE_ID%TYPE;
+	interval	R_BASE.INTERVAL%TYPE;
+    items       NUMBER;
+    sdt			R_BASE.START_DATE_TIME%TYPE;
+    edt			R_BASE.START_DATE_TIME%TYPE;
+    
+   --new variables
+   n_counter_first NUMBER :=1;
+   n_counter_last NUMBER :=0;
+    
+	BEGIN /* initial begin for this procedure  */
+	
+	    /* set all the parameters for this call   */
+	    init_riverware_dataset(parameter_names,parameter_values);
+	    
+		/* validate the external data source identifier  */
+		validate_data_source(curr_data_source_id,'RC.WRDTDB');
+		
+		/* determine the HDB interval pass exception if interval passed back = 'NONE' */
+        interval := set_hdb_interval(interval_number,interval_name); 
+        IF interval = 'NONE' then 
+			DENY_ACTION('Unsupported combination for Timesteps: ' || to_char(interval_number)
+            || '  ' || interval_name);
+		END IF;
+		
+		/* make sure that the start_date _time variable dat has been set  */
+		if curr_start_of_time is null then
+			DENY_ACTION('Start of Riverware Time Date is <<NULL>>');
+		end if;
+		
+		/* validate the setable input variables to HDB stored procedures  */
+		IF curr_data_tables = 'real' then
+		  validate_agency(curr_agency_id,'RC.WRDTB');
+		  validate_collection_system(curr_collection_id,'RC.WRDTB');
+		ELSIF curr_data_tables = 'model' and interval = 'other' then
+			DENY_ACTION('Illegal interval of "OTHER" for WRITING to Model tables');
+		ELSIF curr_data_tables = 'model' then
+		  validate_model_run(curr_model_run_id,'RC.WRDTB');
+		ELSE DENY_ACTION('Illegal value for "tables" parameter of : ' || nvl(curr_data_tables,'<<NULL>>'));
+		END IF;
+
+		begin  /* begin block for HDB stored Procedures exceptions */           
+ 
+           FOR l_row1 IN 1 .. slot_date_value_counts.count
+           LOOP
+           n_counter_last := n_counter_last + slot_date_value_counts(l_row1);
+                
+                FOR l_row2 IN n_counter_first .. n_counter_last
+                LOOP
+                
+                get_riverware_sdi(curr_data_source_id,riverware_object_names(l_row1),riverware_slot_names(l_row1),sdi_number);
+                    
+				sdt := set_hdb_date(date_array(l_row2),interval_number,interval_name,'sdt');	
+				edt := set_hdb_date(date_array(l_row2),interval_number,interval_name,'edt');	
+                
+				IF curr_data_tables = 'real' THEN
+					modify_r_base_raw (sdi_number,interval,sdt,edt,value_array(l_row2),curr_agency_id,
+					curr_overwrite_flag,def_validation,curr_collection_id,def_loading_application_id,
+					def_method_id,def_computation_id,'Y');
+				ELSE
+					modify_m_table_raw(curr_model_run_id,sdi_number,sdt,edt,value_array(l_row2),interval,'Y');
+			    END IF;                
+                
+                --DBMS_OUTPUT.put_line ( date_array(l_row2) || '-' || value_array(l_row2) || '-' || riverware_object_names(l_row1) || ' - ' ||  riverware_slot_names(l_row1) );
+               
+                n_counter_first := n_counter_last+1;
+                END LOOP; 
+         END LOOP;      
+
+		EXCEPTION
+		when others then
+		    rollback;
+			raise_application_error(-20003, SQLERRM);
+		end;  /* end block for HDB stored procedure exception  */	
+		/* the process went smoothly if we got here so do a commit   */
+        COMMIT;
+        
+	END WRITE_RW_GROUP_DATA_TO_DB;  /* end of write_rw_group_data_to_db  procedure  */
+
+
+
+
+/*	procedure delete_riverware_data_from_db deletes data in database from Riverware    */  
+	procedure delete_riverware_data_from_db(  
+	  riverware_object_name	REF_EXT_SITE_DATA_MAP.PRIMARY_SITE_CODE%TYPE,
+	  riverware_slot_name	REF_EXT_SITE_DATA_MAP.PRIMARY_DATA_CODE%TYPE,
+	  interval_number       NUMBER,
+	  interval_name         VARCHAR2,
+	  date_array            numberTable,
+	  parameter_names       stringTable,
+	  parameter_values      stringTable) IS
+	/*  
+		procedure delete_riverware_data_from_db deletes the data passed from Riverware from 
+		the HDB database r_base table.  Previously written procedures are called to do the actual
+		database deleting from r_base.
+		
+	 Initial Programming  by M. Bogner     April 2007
+     Modified April 09 2007  to remove status and return message
+	*/	
+
+    /* declare internal variables */
+ 	sdi_number	HDB_SITE_DATATYPE.SITE_DATATYPE_ID%TYPE;
+	interval	R_BASE.INTERVAL%TYPE;
+    items       NUMBER;
+    sdt			R_BASE.START_DATE_TIME%TYPE;
+    edt			R_BASE.START_DATE_TIME%TYPE;
+    
+	BEGIN /* initial begin for this procedure  */
+	
+	    /* set all the parameters for this call   */
+	    init_riverware_dataset(parameter_names,parameter_values);
+	    
+		/* validate the external data source identifier  */
+		validate_data_source(curr_data_source_id,'RC.DRDFDB');
+		
+		/* next go get the sdi for this mapping                */
+		begin
+		  get_riverware_sdi(curr_data_source_id,riverware_object_name,riverware_slot_name,sdi_number);
+		EXCEPTION
+		when others then
+			raise_application_error(-20003, SQLERRM);
+		end;
+		/* determine the HDB interval pass exception if interval passed back = 'NONE' */
+        interval := set_hdb_interval(interval_number,interval_name); 
+        IF interval = 'NONE' then 
+			DENY_ACTION('Illegal combination for Timesteps: ' || to_char(interval_number)
+            || '  ' || interval_name);
+		END IF;
+		
+		/* make sure that the start_date _time variable dat has been set  */
+		if curr_start_of_time is null then
+			DENY_ACTION('Start of Riverware Time Date is <<NULL>>');
+		end if;
+		
+		/* validate the setable input variables to HDB stored procedures  */
+		IF curr_data_tables = 'real' then
+		  validate_agency(curr_agency_id,'RC.DRDFB');
+		  validate_collection_system(curr_collection_id,'RC.DRDFB');
+		ELSE DENY_ACTION('Illegal value for "tables" parameter of : ' || nvl(curr_data_tables,'<<NULL>>'));
+		END IF;
+
+		begin  /* begin block for HDB stored Procedures exceptions */
+			items := date_array.count();
+			For i IN 1..items LOOP	    
+			  begin  /* begin block for HDB stored Procedures exceptions  in loop*/
+				/* start date time is the adjusted date,  end date time will be the date given by riverware */
+				sdt := set_hdb_date(date_array(i),interval_number,interval_name,'sdt');	
+				edt := set_hdb_date(date_array(i),interval_number,interval_name,'edt');
+				delete_r_base(sdi_number,interval,sdt,edt,curr_agency_id,def_loading_application_id);	
+
+			  EXCEPTION when others then null;
+			  end;  /* end block for HDB stored procedure exception within loop */
+		
+			END LOOP;
+
+		EXCEPTION
+		when others then
+		    rollback;
+			raise_application_error(-20003, SQLERRM);
+		end;  /* end block for HDB stored procedure exception  */
+
+		/* Everything went fine if we got to here so do a commit  */
+        COMMIT;
+        
+	END DELETE_RIVERWARE_DATA_FROM_DB;  /* end of delete_riverware_data_from_db  procedure  */
+
+
+/*	procedure delete_rw_group_data_from_db deletes group data in database from Riverware    */  
+	procedure delete_rw_group_data_from_db(  
+      number_of_grouped_slots NUMBER,
+      riverware_object_names	stringTableCLOB,
+	  riverware_slot_names	stringTableCLOB,
+	  interval_number       NUMBER,
+	  interval_name         VARCHAR2,
+      slot_date_value_counts numberTable,
+	  date_array            numberTable,
+	  parameter_names       stringTable,
+	  parameter_values      stringTable ) IS
+	/*  
+		procedure delete_rw_group_data_from_db deletes the group data passed from Riverware to 
+		the HDB database. 		
+  	    Initial Programming  by Ismail O.     March 2018
+  	*/	
+
+    /* declare internal variables */
+ 	sdi_number	HDB_SITE_DATATYPE.SITE_DATATYPE_ID%TYPE;
+	interval	R_BASE.INTERVAL%TYPE;
+    items       NUMBER;
+    sdt			R_BASE.START_DATE_TIME%TYPE;
+    edt			R_BASE.START_DATE_TIME%TYPE;
+    
+      --new variables
+   n_counter_first NUMBER :=1;
+   n_counter_last NUMBER :=0; 
+    
+    
+	BEGIN /* initial begin for this procedure  */
+	
+	    /* set all the parameters for this call   */
+	    init_riverware_dataset(parameter_names,parameter_values);
+	    
+		/* validate the external data source identifier  */
+		validate_data_source(curr_data_source_id,'RC.DRDFDB');
+		
+		/* determine the HDB interval pass exception if interval passed back = 'NONE' */
+        interval := set_hdb_interval(interval_number,interval_name); 
+        IF interval = 'NONE' then 
+			DENY_ACTION('Illegal combination for Timesteps: ' || to_char(interval_number)
+            || '  ' || interval_name);
+		END IF;
+		
+		/* make sure that the start_date _time variable dat has been set  */
+		if curr_start_of_time is null then
+			DENY_ACTION('Start of Riverware Time Date is <<NULL>>');
+		end if;
+		
+		/* validate the setable input variables to HDB stored procedures  */
+		IF curr_data_tables = 'real' then
+		  validate_agency(curr_agency_id,'RC.DRDFB');
+		  validate_collection_system(curr_collection_id,'RC.DRDFB');
+		ELSIF curr_data_tables = 'model' and interval = 'other' then
+			DENY_ACTION('Illegal interval of "OTHER" for WRITING to Model tables');
+		ELSIF curr_data_tables = 'model' then
+		  validate_model_run(curr_model_run_id,'RC.DRDFB');
+		ELSE DENY_ACTION('Illegal value for "tables" parameter of : ' || nvl(curr_data_tables,'<<NULL>>'));
+		END IF;
+
+
+		begin  /* begin block for HDB stored Procedures exceptions */
+        
+           FOR l_row1 IN 1 .. slot_date_value_counts.count
+           LOOP
+           n_counter_last := n_counter_last + slot_date_value_counts(l_row1);
+                
+                FOR l_row2 IN n_counter_first .. n_counter_last
+                LOOP
+                
+                /* next go get the sdi for this mapping                */
+		        get_riverware_sdi(curr_data_source_id,riverware_object_names(l_row1),riverware_slot_names(l_row1),sdi_number);
+                
+				sdt := set_hdb_date(date_array(l_row2),interval_number,interval_name,'sdt');	
+				edt := set_hdb_date(date_array(l_row2),interval_number,interval_name,'edt');	
+             
+  				IF curr_data_tables = 'real' THEN
+					delete_r_base(sdi_number,interval,sdt,edt,curr_agency_id,def_loading_application_id);	
+				ELSE
+					delete_m_table(curr_model_run_id,sdi_number,sdt,edt,interval);	
+			    END IF;    
+                
+
+                --DBMS_OUTPUT.put_line ( date_array(l_row2) || '-' || value_array(l_row2) || '-' || riverware_object_names(l_row1) || ' - ' ||  riverware_slot_names(l_row1) );               
+                n_counter_first := n_counter_last+1;
+                END LOOP; 
+		
+			END LOOP;
+
+		EXCEPTION
+		when others then
+		    rollback;
+			raise_application_error(-20003, SQLERRM);
+		end;  /* end block for HDB stored procedure exception  */
+
+		/* Everything went fine if we got to here so do a commit  */
+        COMMIT;
+        
+	END DELETE_RW_GROUP_DATA_FROM_DB;  /* end of delete_rw_group_data_from_db  procedure  */
+
+
+/*	procedure read_db_data_flag_to_riverware reads data including data flags from database to pass to Riverware    */  
+	procedure read_db_data_flag_to_riverware(  
+	  riverware_object_name	REF_EXT_SITE_DATA_MAP.PRIMARY_SITE_CODE%TYPE,
+	  riverware_slot_name	REF_EXT_SITE_DATA_MAP.PRIMARY_DATA_CODE%TYPE,
+	  interval_number       NUMBER,
+	  interval_name         VARCHAR2,
+	  start_time			NUMBER,
+	  end_time				NUMBER,
+	  parameter_names       stringTable,
+	  parameter_values      stringTable,
+	  date_array        OUT numberTable,
+	  value_array       OUT numberTable,
+    flag_array	OUT	charTable) IS
+	/*  
+		procedure read_db_data_flag_to_riverware reads the data along with data flags from the HDB database and then
+		passes this data to Riverware
+		
+	 Initial Programming  by M. Bogner     April 2007
+   Modified by IsmailO March 16 2017 to add Validation column with  read_db_data_flag_to_riverware and read_real_data_flag
+	*/	
+
+    /* declare internal variables */
+ 	sdi_number	HDB_SITE_DATATYPE.SITE_DATATYPE_ID%TYPE;
+	interval	R_BASE.INTERVAL%TYPE;
+    items       NUMBER;
+    sdt			R_BASE.START_DATE_TIME%TYPE;
+    edt			R_BASE.START_DATE_TIME%TYPE;
+    interval_in_days NUMBER;  /* used for querying r_other table with existing multiple intervals */
+    
+	BEGIN /* initial begin for this procedure  */
+	
+	    /* set all the parameters for this call   */
+	    init_riverware_dataset(parameter_names,parameter_values);
+	    
+		/* validate the external data source identifier  */
+		validate_data_source(curr_data_source_id,'RC.WRDTDB');
+		
+		/* next go get the sdi for this mapping                */
+		begin
+		  get_riverware_sdi(curr_data_source_id,riverware_object_name,riverware_slot_name,sdi_number);
+		EXCEPTION
+		when others then
+			raise_application_error(-20003, SQLERRM);
+		end;
+		/* determine the HDB interval pass exception if interval passed back = 'NONE' */
+        interval := set_hdb_interval(interval_number,interval_name); 
+        IF interval = 'NONE' then 
+			DENY_ACTION('Illegal combination for Timesteps: ' || to_char(interval_number)
+            || '  ' || interval_name);
+		END IF;
+
+		/* determine the HDB interval timestep */
+        interval_in_days := set_hdb_timestep(interval_number,interval_name); 
+		
+		/* make sure that the start_date _time variable date has been set  */
+		if curr_start_of_time is null then
+			DENY_ACTION('Start of Riverware Time Date is <<NULL>>');
+		end if;
+		
+		/* go set the dates for the querying of HDB tables  */
+		/* adjust both dates for beginning of interval      */
+		sdt := set_hdb_date(start_time,interval_number,interval_name,'sdt');	
+		edt := set_hdb_date(end_time,interval_number,interval_name,'sdt');
+			
+		/* validate the setable input variables to HDB stored procedures and/or go get the data */
+		IF curr_data_tables = 'real' then
+			read_real_data_flag(interval,sdi_number,curr_start_of_time,sdt,edt,interval_in_days,date_array,value_array,flag_array);
+		ELSIF curr_data_tables = 'model' and interval = 'other' then
+			DENY_ACTION('Illegal interval of "OTHER" for READING of Model tables');
+		ELSIF curr_data_tables = 'model' then
+			validate_model_run(curr_model_run_id,'RC.RDDTR');
+			read_model_data(interval,sdi_number,curr_model_run_id,curr_start_of_time,sdt,edt,date_array,value_array); 
+		ELSE DENY_ACTION('Illegal value for "tables" parameter of : ' || nvl(curr_data_tables,'<<NULL>>'));
+		END IF;
+
+        
+	END READ_DB_DATA_FLAG_TO_RIVERWARE;  /* end of read_db_data_flag_to_riverware  procedure  */
+
+
+/*	procedure read_db_data_to_riverware reads data from database to pass to Riverware    */  
+	procedure read_db_data_to_riverware(  
+	  riverware_object_name	REF_EXT_SITE_DATA_MAP.PRIMARY_SITE_CODE%TYPE,
+	  riverware_slot_name	REF_EXT_SITE_DATA_MAP.PRIMARY_DATA_CODE%TYPE,
+	  interval_number       NUMBER,
+	  interval_name         VARCHAR2,
+	  start_time			NUMBER,
+	  end_time				NUMBER,
+	  parameter_names       stringTable,
+	  parameter_values      stringTable,
+	  date_array        OUT numberTable,
+	  value_array       OUT numberTable) IS
+	/*  
+		procedure read_db_data_to_riverware reads the data from the HDB database and then
+		passes this data to Riverware
+		
+	 Initial Programming  by M. Bogner     April 2007
+     Modified April 09 2007  to remove status and return message
+	*/	
+
+    /* declare internal variables */
+ 	sdi_number	HDB_SITE_DATATYPE.SITE_DATATYPE_ID%TYPE;
+	interval	R_BASE.INTERVAL%TYPE;
+    items       NUMBER;
+    sdt			R_BASE.START_DATE_TIME%TYPE;
+    edt			R_BASE.START_DATE_TIME%TYPE;
+    interval_in_days NUMBER;  /* used for querying r_other table with existing multiple intervals */
+    
+	BEGIN /* initial begin for this procedure  */
+	
+	    /* set all the parameters for this call   */
+	    init_riverware_dataset(parameter_names,parameter_values);
+	    
+		/* validate the external data source identifier  */
+		validate_data_source(curr_data_source_id,'RC.WRDTDB');
+		
+		/* next go get the sdi for this mapping                */
+		begin
+		  get_riverware_sdi(curr_data_source_id,riverware_object_name,riverware_slot_name,sdi_number);
+		EXCEPTION
+		when others then
+			raise_application_error(-20003, SQLERRM);
+		end;
+		/* determine the HDB interval pass exception if interval passed back = 'NONE' */
+        interval := set_hdb_interval(interval_number,interval_name); 
+        IF interval = 'NONE' then 
+			DENY_ACTION('Illegal combination for Timesteps: ' || to_char(interval_number)
+            || '  ' || interval_name);
+		END IF;
+
+		/* determine the HDB interval timestep */
+        interval_in_days := set_hdb_timestep(interval_number,interval_name); 
+		
+		/* make sure that the start_date _time variable date has been set  */
+		if curr_start_of_time is null then
+			DENY_ACTION('Start of Riverware Time Date is <<NULL>>');
+		end if;
+		
+		/* go set the dates for the querying of HDB tables  */
+		/* adjust both dates for beginning of interval      */
+		sdt := set_hdb_date(start_time,interval_number,interval_name,'sdt');	
+		edt := set_hdb_date(end_time,interval_number,interval_name,'sdt');
+			
+		/* validate the setable input variables to HDB stored procedures and/or go get the data */
+		IF curr_data_tables = 'real' then
+			read_real_data(interval,sdi_number,curr_start_of_time,sdt,edt,interval_in_days,date_array,value_array);
+		ELSIF curr_data_tables = 'model' and interval = 'other' then
+			DENY_ACTION('Illegal interval of "OTHER" for READING of Model tables');
+		ELSIF curr_data_tables = 'model' then
+			validate_model_run(curr_model_run_id,'RC.RDDTR');
+			read_model_data(interval,sdi_number,curr_model_run_id,curr_start_of_time,sdt,edt,date_array,value_array); 
+		ELSE DENY_ACTION('Illegal value for "tables" parameter of : ' || nvl(curr_data_tables,'<<NULL>>'));
+		END IF;
+
+        
+	END READ_DB_DATA_TO_RIVERWARE;  /* end of read_db_data_and_flags_to_riverware  procedure  */
+
+	
+	procedure init_ensemble( p_ensemble_id REF_ENSEMBLE.ENSEMBLE_ID%TYPE) is
+		
+	/*
+	  Procedure init_ensemble clears any information that is currently identified
+	  by the input ensemble
+	 
+	 Initial Programming  by M. Bogner     January 2014
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 l_temp_num  NUMBER;
+	 l_proc_abbr VARCHAR2(32) := 'INIT_ENSEMBLE';
+	 l_ensemble_name VARCHAR2(256);
+	 
+	 cursor c1 is select model_run_id from REF_ENSEMBLE_TRACE where ensemble_id = P_ENSEMBLE_ID;
+	 
+	 BEGIN	 
+	    /* get the ensemble_name from the ensemble table  for use later  */
+	        select ensemble_name into l_ensemble_name from REF_ENSEMBLE 
+	        where ensemble_id = P_ENSEMBLE_ID;
+	        
+		/* 1. Clear out all non key columns of table REF_ENSEMBLE  */
+		    update REF_ENSEMBLE set agen_id = null, trace_domain = null, cmmnt = null
+		      where ensemble_id = P_ENSEMBLE_ID;
+
+		/* 2. Clear out all non key columns of table REF_ENSEMBLE_TRACE for all
+		      Traces that are child records of this ensemble                    */
+		    update REF_ENSEMBLE_TRACE set trace_numeric = null, trace_name = null
+		      where ensemble_id = P_ENSEMBLE_ID;
+		
+		/* 3. delete all keys for this ensemble from table REF_ENSEMBLE_KEYVAL */
+		    delete REF_ENSEMBLE_KEYVAL where ensemble_id = P_ENSEMBLE_ID;
+		
+		/* 4. delete all REF_MODEL_RUN_KEYVAL records for all traces related to this ensemble  */
+		    delete REF_MODEL_RUN_KEYVAL where model_run_id in (
+		    select model_run_id from REF_ENSEMBLE_TRACE where ensemble_id = P_ENSEMBLE_ID);
+		    
+		/* 5. set model_run_name in REF_MODEL_RUN records to a generic name   */
+		    update REF_MODEL_RUN RMR set RMR.model_run_name =
+            (select distinct substr(l_ensemble_name,1,60) || substr(to_char(10000+RET.trace_id),2,4)
+             from REF_ENSEMBLE_TRACE RET where RET.ensemble_id = P_ENSEMBLE_ID
+              and RET.model_run_id = RMR.model_run_id )
+            where RMR.model_run_id in (select model_run_id from REF_ENSEMBLE_TRACE 
+                                       where ensemble_id = P_ENSEMBLE_ID);
+		    
+		/* 6. delete all model_run data from the database for all model_run_id's associated
+		      with this ensemble                                                             */
+		    
+		    FOR trace_rec in c1
+		    LOOP  
+		      model_run_id_actions (trace_rec.model_run_id, l_proc_abbr);
+		    END LOOP;
+		      
+			EXCEPTION
+			when OTHERS  THEN DENY_ACTION('Invalid ENSEMBLE ID: '||
+			nvl(to_char(P_ENSEMBLE_ID),'<<NULL>>')||' PROC: '|| l_proc_abbr);
+	
+	end init_ensemble;	
+	
+
+  FUNCTION GET_ENSEMBLE_TRACE_MRI(P_ENSEMBLE_ID REF_ENSEMBLE.ENSEMBLE_ID%TYPE,
+                                  P_TRACE_ID REF_ENSEMBLE_TRACE.TRACE_ID%TYPE )
+    RETURN number is
+    l_model_run_id REF_MODEL_RUN.MODEL_RUN_ID%TYPE;
+
+    BEGIN
+    /*  This function was written to assist in finding the unique surrogate MODEL_RUN_ID
+        Number for a given ENSEMBLE, TRACE in HDB.  The record is found in table REF_ENSEMBLE_TRACE 
+        Joined with TABLE REF_MODEL_RUN.
+        If the record is not found, a negative -999 is returned.
+    
+        this function written by Mark Bogner   January 2014
+    */
+      begin
+        select ret.model_run_id into l_model_run_id
+          from ref_ensemble_trace ret, ref_model_run rmr
+          where 
+              ret.ensemble_id = P_ENSEMBLE_ID
+          and ret.trace_id = P_TRACE_ID
+          and ret.model_run_id = rmr.model_run_id;
+
+        exception when others then        
+	       l_model_run_id := -999;
+      end;
+      
+    RETURN (l_model_run_id);
+  
+  END;  /* End of Function GET_ENSEMBLE_TRACE_MRI  */ 
+  
+
+	procedure read_ensemble_metadata(  
+	  p_ensemble_id REF_ENSEMBLE.ENSEMBLE_ID%TYPE,
+	  output_parameter_names  OUT stringTable,
+	  output_parameter_values OUT stringTableLrg) is
+
+	/*  
+		procedure read_ensemble_metadata is used to look up any and all ENSEMBLE Metatdata values needed for
+		the riverware connection program.  
+	  
+	 Initial Programming  by M. Bogner    January 2014
+	*/
+	
+	/* first declare the temporary variables needed for proc calls  and etc... */
+	l_ensemble_name REF_ENSEMBLE.ENSEMBLE_NAME%TYPE;
+	l_agen_id REF_ENSEMBLE.AGEN_ID%TYPE;
+	l_trace_domain REF_ENSEMBLE.TRACE_DOMAIN%TYPE;
+	l_cmmnt REF_ENSEMBLE.CMMNT%TYPE;
+	l_index number;
+	
+	BEGIN	
+		/* 1. get ensemble table columns for the input ensemble_id                */
+		begin
+         select ensemble_name,agen_id,trace_domain,cmmnt 
+           into l_ensemble_name,l_agen_id,l_trace_domain,l_cmmnt
+           from REF_ENSEMBLE where ensemble_id = P_ENSEMBLE_ID;
+		
+		EXCEPTION
+		when others then
+			raise_application_error(-20003, SQLERRM);
+		end;
+		
+		/* otherwise everything went smoothly so setting the REF_ENSEMBLE name value pairs  */
+		output_parameter_names(1) := 'name';
+		output_parameter_values(1) := l_ensemble_name;
+		output_parameter_names(2) := 'agen_id';
+		output_parameter_values(2) := to_char(l_agen_id);
+		output_parameter_names(3) := 'domain';
+		output_parameter_values(3) := l_trace_domain;
+		output_parameter_names(4) := 'comment';
+		output_parameter_values(4) := l_cmmnt;
+		
+		/* now go get the keyval pairs from the REF_ENSEMBLE_KEYVAL table   */
+		l_index := 5;
+		    
+		FOR ensemble_key in (select * from REF_ENSEMBLE_KEYVAL where ensemble_id = P_ENSEMBLE_ID)
+		  LOOP  
+   		    output_parameter_names(l_index) := ensemble_key.key_name;
+		    output_parameter_values(l_index) := ensemble_key.key_value;
+		    l_index := l_index + 1;
+		 END LOOP;
+
+	end read_ensemble_metadata;  
+
+
+	procedure read_ensemble_trace_metadata(  
+	  p_ensemble_id REF_ENSEMBLE_TRACE.ENSEMBLE_ID%TYPE,
+	  p_trace_id  REF_ENSEMBLE_TRACE.TRACE_ID%TYPE,
+	  output_parameter_names  OUT stringTable,
+	  output_parameter_values OUT stringTableLrg) is
+
+	/*  
+		procedure read_ensemble_trace_metadata is used to look up any and all ENSEMBLE Trace Metatdata values 
+		needed for the riverware connection program.  
+	  
+	 Initial Programming  by M. Bogner    January 2014
+	*/
+	
+	/* first declare the temporary variables needed for proc calls  and etc... */
+	l_trace_numeric REF_ENSEMBLE_TRACE.TRACE_NUMERIC%TYPE;
+	l_trace_name REF_ENSEMBLE_TRACE.TRACE_NAME%TYPE;
+	l_model_run_id REF_ENSEMBLE_TRACE.MODEL_RUN_ID%TYPE;
+	l_index number;
+	
+	BEGIN	
+		/* 1. get ref_ensemble_trace table columns for the input ensemble_id, trace_id   */
+		begin
+         select trace_numeric,trace_name,model_run_id 
+           into l_trace_numeric,l_trace_name,l_model_run_id
+           from REF_ENSEMBLE_TRACE where ensemble_id = P_ENSEMBLE_ID and trace_id = P_TRACE_ID;
+		
+		EXCEPTION
+		when others then
+			raise_application_error(-20003, SQLERRM);
+		end;
+		
+		/* otherwise everything went smoothly so setting the REF_ENSEMBLE_TRACE name value pairs  */
+		output_parameter_names(1) := 'numeric';
+		output_parameter_values(1) := l_trace_numeric;
+		output_parameter_names(2) := 'name';
+		output_parameter_values(2) := l_trace_name;
+		output_parameter_names(3) := 'model_run_id';
+		output_parameter_values(3) := to_char(l_model_run_id);
+		
+		/* 2. go get the keyval pairs from the REF_MODEL_RUN_KEYVAL table for the input ensemble_id, trace_id */
+		l_index := 4;
+		    
+		FOR trace_key in (select * from REF_MODEL_RUN_KEYVAL where model_run_id in
+		      (select model_run_Id from REF_ENSEMBLE_TRACE where ensemble_id = P_ENSEMBLE_ID
+		      and trace_id = P_TRACE_ID))
+		  LOOP  
+   		    output_parameter_names(l_index) := trace_key.key_name;
+		    output_parameter_values(l_index) := trace_key.key_value;
+		    l_index := l_index + 1;
+		 END LOOP;
+
+	end read_ensemble_trace_metadata;  
+	
+	procedure write_ensemble_metadata(  
+	  p_ensemble_id REF_ENSEMBLE.ENSEMBLE_ID%TYPE,
+	  p_parameter_names  IN stringTable,
+	  p_parameter_values IN stringTableLrg) is
+		
+	/*
+	  Procedure write_ensemble_metadata writes the metadata for a given ensemble
+	  including all key names and a matching list of key values
+	 
+	 Initial Programming  by M. Bogner     January 2014
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 l_count   NUMBER;
+	 l_items   NUMBER;
+     l_parameter REF_ENSEMBLE_KEYVAL.KEY_NAME%TYPE;
+     
+	 BEGIN
+        /* validate the passed in P_ENSEMBLE_ID parameter  */
+        validate_ensemble(P_ENSEMBLE_ID,'WRITE_ENSEMBLE_METADATA');
+	    /*  parse the array of parameters  */
+		l_items := p_parameter_names.count();
+		For i IN 1..l_items LOOP	    
+	     l_parameter := UPPER(p_parameter_names(i));
+            /* test to see if this is metatdata for the REF_ENSEMBLE record  */ 
+			IF l_parameter = 'NAME' THEN 
+			  update REF_ENSEMBLE set ensemble_name = p_parameter_values(i) where ensemble_id = P_ENSEMBLE_ID;
+			ELSIF l_parameter = 'AGEN_ID' THEN
+			  update REF_ENSEMBLE set agen_id = STN(p_parameter_values(i)) where ensemble_id = P_ENSEMBLE_ID;
+			ELSIF l_parameter = 'DOMAIN' THEN
+			  update REF_ENSEMBLE set trace_domain = p_parameter_values(i) where ensemble_id = P_ENSEMBLE_ID;
+			ELSIF l_parameter = 'COMMENT' THEN
+			  update REF_ENSEMBLE set cmmnt = p_parameter_values(i) where ensemble_id = P_ENSEMBLE_ID;
+			ELSE
+			  /* otherwise this is a key for the appropriate key table  */
+			  insert into REF_ENSEMBLE_KEYVAL (ensemble_id,key_name,key_value,date_time_loaded)
+			    values (P_ENSEMBLE_ID,p_parameter_names(i),p_parameter_values(i),sysdate);
+			END IF;
+		
+		END  LOOP;
+        /* all done so commit the changes  */
+		commit;
+	end write_ensemble_metadata;
+
+	
+	procedure write_ensemble_trace_metadata(  
+	  p_ensemble_id REF_ENSEMBLE_TRACE.ENSEMBLE_ID%TYPE,
+	  p_trace_id REF_ENSEMBLE_TRACE.TRACE_ID%TYPE,
+	  p_parameter_names  IN stringTable,
+	  p_parameter_values IN stringTableLrg) is
+		
+	/*
+	  Procedure write_ensemble_trace_metadata writes the metadata for a given ensemble trace
+	  including all key names and a matching list of key values
+	 
+	 Initial Programming  by M. Bogner     January 2014
+	*/
+	 
+	 /* first declare all the temporary variables needed for these checks   */
+	 l_count   NUMBER;
+	 l_items   NUMBER;
+     l_parameter REF_ENSEMBLE_KEYVAL.KEY_NAME%TYPE;
+     l_model_run_id REF_ENSEMBLE_TRACE.MODEL_RUN_ID%TYPE;
+     l_trace_numeric REF_ENSEMBLE_TRACE.TRACE_NUMERIC%TYPE := NULL;
+     l_ensemble_name REF_ENSEMBLE.ENSEMBLE_NAME%TYPE := NULL;
+     l_trace_name REF_ENSEMBLE_TRACE.TRACE_NAME%TYPE := NULL;
+     
+	 BEGIN
+        /* validate the passed in P_ENSEMBLE_ID                      */
+        validate_ensemble_trace(P_ENSEMBLE_ID,P_TRACE_ID,'WRITE_ENSEMBLE_TRACE_METADATA');
+        /* get the ensemble_name for this ensemble_trace  */
+        select ensemble_name into l_ensemble_name from REF_ENSEMBLE
+          where ensemble_id = P_ENSEMBLE_ID;
+        /* get the model_run_id for this ensemble_trace  */
+        select model_run_id into l_model_run_id from REF_ENSEMBLE_TRACE 
+          where ensemble_id = P_ENSEMBLE_ID and trace_id = P_TRACE_ID;
+	    /*  parse the array of parameters  */
+		l_items := p_parameter_names.count();
+		For i IN 1..l_items LOOP	    
+	     l_parameter := UPPER(p_parameter_names(i));
+            /* test to see if this is metadata for the REF_ENSEMBLE_TRACE record  */ 
+			IF l_parameter = 'NAME' THEN 
+			  update REF_ENSEMBLE_TRACE set trace_name = p_parameter_values(i) 
+			  where ensemble_id = P_ENSEMBLE_ID and trace_id = P_TRACE_ID;
+			  l_trace_name := p_parameter_values(i);
+			ELSIF l_parameter = 'NUMERIC' THEN
+			  update REF_ENSEMBLE_TRACE set trace_numeric = STN(p_parameter_values(i)) 
+			  where ensemble_id = P_ENSEMBLE_ID and trace_id = P_TRACE_ID;
+			  l_trace_numeric := STN(p_parameter_values(i));
+			ELSIF l_parameter = 'MODEL_RUN_ID' THEN
+			  update REF_ENSEMBLE_TRACE set model_run_id = STN(p_parameter_values(i)) 
+			  where ensemble_id = P_ENSEMBLE_ID and trace_id = P_TRACE_ID;
+			ELSE
+			  /* otherwise this is a key for the appropriate key table  */
+			  insert into REF_MODEL_RUN_KEYVAL (model_run_id,key_name,key_value,date_time_loaded)
+			    values (l_model_run_id,p_parameter_names(i),p_parameter_values(i),sysdate);
+			END IF;
+		
+		END  LOOP;
+        /* go set the REF_MODEL_RUN MODEL_RUN_NAME, Hydrologic Indicator */
+        /* set model_name = ensemble_name || (trace_numeric (if not null) otherwise trace_name)  */
+        /* set Hydrologic indicator if trace_numeric is not null                                 */
+        update REF_MODEL_RUN set 
+          model_run_name = substr(l_ensemble_name,1,50) || 
+            decode(nvl(l_trace_numeric,-999),-999,substr(l_trace_name,1,14),to_char(l_trace_numeric)),
+          hydrologic_indicator =  
+            decode(nvl(l_trace_numeric,-999),-999,hydrologic_indicator,to_char(l_trace_numeric)),
+          extra_keys_y_n = 'Y'  
+         where model_run_id = l_model_run_id;
+        /* all done so commit the changes  */
+		commit;
+	end write_ensemble_trace_metadata;
+
+	procedure testing (
+		test_number NUMBER,
+		test_char   VARCHAR2) is
+	
+	temp_num number;
+	temp_char1 varchar2(24);
+	temp_char2 varchar2(64);
+	temp_char3 varchar2(100);
+	parmnames stringTable;
+	parmvalues stringTable;
+	out_parmnames stringTable;
+	out_parmvalues stringTableLrg;
+	in_dates      numberTable;
+	in_values     numberTable;
+	out_dates      numberTable;
+	out_values     numberTable;
+	temp_date1    DATE;
+		
+	begin
+	/*
+	    curr_data_source_id := 1;
+	    curr_agency_id := 1;
+	    curr_collection_id := 1;
+	    curr_data_tables := 'real';
+	    curr_model_run_id := 1;
+	    curr_start_of_time := to_date('01-JAN-1800','dd-MON-yyyy');
+	*/
+	    parmnames(1) := 'name'; parmvalues(1) := 'my trace testing--1';    
+	    parmnames(2) := 'domain'; parmvalues(2) := 'My Domain';    
+	    parmnames(3) := 'numeric'; parmvalues(3) := '69';
+	    parmnames(4) := 'collection_system_id'; parmvalues(4) := '1';    
+	    parmnames(5) := 'begin_year'; parmvalues(5) := '1800';
+		parmnames(6) := 'model_run_id'; parmvalues(6) := '1';    
+	    parmnames(7) := 'comment'; parmvalues(7) := 'No real good comment';    
+--	    parmnames(8) := 'type'; parmvalues(8) := 'write';    
+	    parmnames(8) := 'type'; parmvalues(8) := 'read';    
+	    parmnames(9) := 'tables'; parmvalues(9) := 'real';    
+    
+	    in_dates(1) := 6311347200;
+	    in_values(1) := 12345.99;
+	    in_dates(2) := 6524922800;
+	    in_values(2) := 98765.99;
+
+	    in_dates(3) := 6525532800;
+	    in_values(3) := 7777;
+	    in_dates(4) := 6526137600;
+	    in_values(4) := 55.66;
+
+--        init_ensemble(1);
+--      write_ensemble_trace_metadata (1,1,parmnames,parmvalues);    
+--      write_ensemble_metadata (1,parmnames,parmvalues);    
+--       read_ensemble_metadata(1,out_parmnames,out_parmvalues);
+--     read_ensemble_trace_metadata(1,1,out_parmnames,out_parmvalues);
+--     for temp_num in 1..out_parmnames.count() loop
+--     insert into temp1 values (out_parmnames(temp_num)||':' || out_parmvalues(temp_num) || ', ');
+--     end loop;
+--    commit;
+
+--       write_riverware_data_to_db('a','b',test_number,test_char,in_dates,in_values,parmnames,parmvalues);
+--              deny_action('RETURN MESSAGE: '||temp_char3); 
+--      read_db_data_to_riverware('a','b',test_number,test_char,0,6540345186,parmnames,parmvalues,out_dates,out_values);
+--         deny_action('First Value: '||to_char(out_dates(1))); 
+--     temp_char3 := null;
+--     for temp_num in 1..out_values.count() loop
+--     temp_char3 := temp_char3 || to_char(out_values(temp_num)) || ',';
+--     end loop;
+--     deny_action('Numbers: '|| temp_char3); 
+--        write_riverware_data_to_db('a','b',1,'DAY',in_dates,in_values,parmnames,parmvalues,temp_num,temp_char3);
+--		  init_riverware_dataset(parmnames,parmvalues);
+--	      read_real_data('hour',1,curr_start_of_time,curr_start_of_time,sysdate,out_dates,out_values);	      
+--	      deny_action('First Value: '||to_char(out_dates(1))); 
+--        delete_riverware_data_from_db('a','b',1,'HOUR',in_dates,parmnames,parmvalues,temp_num,temp_char3);
+--        write_riverware_data_to_db('a','b',1,'DAY',in_dates,in_values,parmnames,parmvalues,temp_num,temp_char3);
+--	    temp_date1 := set_hdb_date(6311347200,test_number,test_char);
+--	    deny_action('DATE: '||to_char(temp_date1));
+--        write_riverware_data_to_db('a','b',6,'HOUR',in_dates,in_values,parmnames,parmvalues,temp_num,temp_char3);
+--		deny_action('UNIT:  ' || parmvalues(1) || ' MSSG:  '||temp_char3);
+--        init_riverware_dmi(parmnames,parmvalues);
+--		get_unit_for_riverware_slot(test_number,'a','a',temp_char1,temp_num,temp_char2);
+--	    deny_action('error NUmber:'||to_char(temp_num) || ' UNIT: ' ||temp_char1||' ERROR: ' ||temp_char2);
+--	    deny_action('The ERROR NUmber is :'||to_char(temp_num) || ' ERROR: ' ||temp_char2);
+--		validate_model_run(test_number,'RC.IRRW');	 
+--		select (to_date('01-JAN-2000','dd-MON-YYYY') - start_of_time) * SECONDS_PER_DAY into temp_num from dual;
+--     EXCEPTION
+---     when OTHERS THEN
+-- 	  deny_action('The NUmber is :'||to_char(test_number));
+	end testing;
+
+  FUNCTION GET_ENSEMBLE_ID(P_ENSEMBLE_NAME VARCHAR2)
+    RETURN NUMBER IS
+      l_ensemble_id REF_ENSEMBLE.ENSEMBLE_ID%TYPE;
+    BEGIN
+    /*  This function was written to assist in finding the unique surrogate ENSEMBLE_ID
+        Number for a given ENSEMBLE_NAME in HDB.  The record is found in table REF_ENSEMBLE.
+        If the record is not found, a negative -999 is returned.
+    
+        this function written by Mark Bogner   January 2013
+    */
+         begin
+        select ensemble_id into l_ensemble_id
+          from ref_ensemble
+          where ensemble_name = P_ENSEMBLE_NAME; 
+         exception when others then        
+	       l_ensemble_id := -999;
+       end;
+    RETURN (l_ensemble_id);
+  
+  END;  /* End of Function GET_ENSEMBLE_ID  */ 
+
+FUNCTION GET_MODEL_RUN_ID(P_MODEL_ID NUMBER, P_MODEL_RUN_NAME VARCHAR2 DEFAULT NULL, P_RUN_DATE DATE DEFAULT NULL, P_IS_RUNDATE_KEY VARCHAR2 DEFAULT 'N')
+  RETURN NUMBER IS
+      l_model_run_id REF_MODEL_RUN.MODEL_RUN_ID%TYPE;
+    BEGIN
+    /*  This function was written to assist in finding the unique surrogate MODEL_RUN_ID
+        Number for a given MODEL_ID, MODEL_RUN_NAME and possibly p_RUN_DATE in HDB.  The record is found 
+        in table TABLE REF_MODEL_RUN.
+        If the record is not found, a negative -999 is returned.
+    
+        this function written by Mark Bogner   January 2013
+    */
+     IF P_IS_RUNDATE_KEY = 'Y' THEN
+       begin
+        select rmr.model_run_id into l_model_run_id
+          from  ref_model_run rmr
+          where 
+              rmr.model_id = P_MODEL_ID
+          and rmr.run_date = P_RUN_DATE
+          and rmr.model_run_name = P_MODEL_RUN_NAME; 
+         exception when others then        
+	       l_model_run_id := -999;
+       end;
+       ELSE
+       begin
+        select rmr.model_run_id into l_model_run_id
+          from ref_model_run rmr
+          where 
+              rmr.model_id = P_MODEL_ID
+              and rmr.model_run_name = P_MODEL_RUN_NAME;
+         exception when others then        
+	       l_model_run_id := -999;
+	    end;
+       END IF;
+    RETURN (l_model_run_id);
+  
+  END;  /* End of Function GET_MODEL_RUN_ID  */ 
+  
+  procedure create_ref_ensemble_trace_rec (
+  p_ensemble_id IN REF_ENSEMBLE.ENSEMBLE_ID%TYPE,
+  p_model_run_id IN REF_MODEL_RUN.MODEL_RUN_ID%TYPE,
+  p_trace_number IN number) is
+ 
+  /* the local variables         */
+  procedure_indicator varchar2(100);
+      
+  l_trace_numeric REF_ENSEMBLE_TRACE.TRACE_NUMERIC%TYPE;
+  l_trace_name REF_ENSEMBLE_TRACE.TRACE_NAME%TYPE DEFAULT NULL;
+      
+  BEGIN
+  /*  This procedure was written to assist in the ENSEMBLE processing to create a record in HDB
+    in table REF_ENSEMBLE_TRACE.
+    
+    this procedure written by Daren Critelli February 2015
+  */
+
+  procedure_indicator := 'ENSEMBLE_TRACE Create FAILED FOR: ';
+
+    /*  first do error checking  */
+	  IF P_MODEL_RUN_ID < 1 THEN 
+		  DENY_ACTION(procedure_indicator || '<NULL> MODEL_RUN_ID');
+    END IF;
+
+    l_trace_numeric := p_trace_number;
+
+	  /*  do the insert */
+    BEGIN
+      insert into REF_ENSEMBLE_TRACE RET
+      (RET.ENSEMBLE_ID,RET.TRACE_ID,RET.TRACE_NUMERIC,RET.TRACE_NAME,RET.MODEL_RUN_ID)
+      values (P_ENSEMBLE_ID,P_TRACE_NUMBER,L_TRACE_NUMERIC,L_TRACE_NAME,P_MODEL_RUN_ID);
+    END;
+    
+end create_ref_ensemble_trace_rec;
+
+procedure create_ref_model_run_rec (
+  p_ensemble_name IN REF_ENSEMBLE.ENSEMBLE_NAME%TYPE,
+  p_model_id IN REF_MODEL_RUN.MODEL_ID%TYPE,
+  p_model_run_id OUT REF_MODEL_RUN.MODEL_ID%TYPE,
+  p_trace_number IN number) is
+ 
+  /* the local variables         */
+  procedure_indicator varchar2(100);
+
+  L_MODEL_RUN_NAME REF_MODEL_RUN.MODEL_RUN_NAME%TYPE;
+  L_MODEL_ID REF_MODEL_RUN.MODEL_ID%TYPE; 
+  L_RUN_DATE REF_MODEL_RUN.RUN_DATE%TYPE; 
+  L_EXTRA_KEYS_Y_N REF_MODEL_RUN.EXTRA_KEYS_Y_N%TYPE DEFAULT 'N'; 
+  L_START_DATE REF_MODEL_RUN.START_DATE%TYPE DEFAULT NULL; 
+  L_END_DATE REF_MODEL_RUN.END_DATE%TYPE DEFAULT NULL;
+  L_HYDROLOGIC_INDICATOR REF_MODEL_RUN.HYDROLOGIC_INDICATOR%TYPE DEFAULT NULL; 
+  L_MODELTYPE REF_MODEL_RUN.MODELTYPE%TYPE DEFAULT NULL;
+  L_TIME_STEP_DESCRIPTOR REF_MODEL_RUN.TIME_STEP_DESCRIPTOR%TYPE DEFAULT NULL;
+  L_CMMNT REF_MODEL_RUN.CMMNT%TYPE DEFAULT NULL;
+      
+  l_model_run_id REF_MODEL_RUN.MODEL_RUN_ID%TYPE; 
+      
+  BEGIN
+  /*  This procedure was written to assist in the ENSEMBLE processing to create a record in HDB
+    in table REF_MODEL_RUN.
+    
+    this procedure written by Daren Critelli February 2015
+  */
+
+  L_MODEL_ID := p_model_id;
+  L_RUN_DATE := sysdate;
+  procedure_indicator := 'MODEL_RUN_ID Create FAILED FOR: ';
+
+  /*  first do error checking  */
+	IF L_MODEL_ID IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> MODEL_ID');
+	ELSIF L_RUN_DATE IS NULL THEN 
+		DENY_ACTION(procedure_indicator || '<NULL> RUN DATE');
+	ELSIF L_MODEL_ID < 1 THEN 
+		DENY_ACTION(procedure_indicator || 'NEGATIVE or ZERO MODEL_ID');
+  END IF;
+
+    L_MODEL_RUN_NAME := substr(P_ENSEMBLE_NAME,1,60) || substr(to_char(10000+P_TRACE_NUMBER),2,4);
+
+	  /*  do the insert */
+    BEGIN
+    
+      insert into REF_MODEL_RUN RMR
+      (RMR.MODEL_RUN_ID,RMR.MODEL_RUN_NAME,RMR.MODEL_ID,RMR.RUN_DATE,RMR.EXTRA_KEYS_Y_N,RMR.START_DATE,
+      RMR.END_DATE,RMR.HYDROLOGIC_INDICATOR,RMR.MODELTYPE,RMR.TIME_STEP_DESCRIPTOR,RMR.CMMNT)
+      values
+      (-1,L_MODEL_RUN_NAME,L_MODEL_ID,L_RUN_DATE,L_EXTRA_KEYS_Y_N,L_START_DATE,L_END_DATE,
+      L_HYDROLOGIC_INDICATOR,L_MODELTYPE,L_TIME_STEP_DESCRIPTOR,L_CMMNT);
+    END;
+ 
+    p_model_run_id := GET_MODEL_RUN_ID(L_MODEL_ID, L_MODEL_RUN_NAME, NULL, 'N'); 
+  
+end create_ref_model_run_rec;
+ 
+procedure create_ensemble_id (
+  p_ensemble_id OUT REF_ENSEMBLE.ENSEMBLE_ID%TYPE,
+  p_ensemble_name IN REF_ENSEMBLE.ENSEMBLE_NAME%TYPE,
+  p_model_id IN REF_MODEL_RUN.MODEL_ID%TYPE,
+  p_number_traces IN number,
+  p_agency_id IN REF_ENSEMBLE.AGEN_ID%TYPE,
+  p_trace_domain IN REF_ENSEMBLE.TRACE_DOMAIN%TYPE,
+  p_cmmnt IN REF_ENSEMBLE.CMMNT%TYPE ) is
+ 
+  /* the local variables         */
+  procedure_indicator varchar2(100);
+  l_ensemble_id REF_ENSEMBLE.ENSEMBLE_ID%TYPE;
+  l_agency_id REF_ENSEMBLE.AGEN_ID%TYPE := -999;
+  l_trace_domain REF_ENSEMBLE.TRACE_DOMAIN%TYPE DEFAULT NULL;
+  l_cmmnt REF_ENSEMBLE.CMMNT%TYPE DEFAULT NULL;
+  l_trace_number number;
+  
+  p_model_run_id REF_MODEL_RUN.MODEL_RUN_ID%TYPE; 
+    
+  BEGIN
+  /*  This procedure was written to assist in the ENSEMBLE processing to create a record in HDB
+    in table REF_ENSEMBLE so that the unique representation of a ENSEMBLE NAME record can be 
+    represented.
+    
+    this procedure written by Daren Critelli February 2015
+  */
+
+  procedure_indicator := 'ENSEMBLE Create FAILED FOR: ';
+
+  /*  first do error checking  */
+  l_ensemble_id := GET_ENSEMBLE_ID(P_ENSEMBLE_NAME);
+  IF P_ENSEMBLE_NAME IS NULL THEN 
+    DENY_ACTION(procedure_indicator || '<NULL> ENSEMBLE_NAME');
+  ELSIF P_MODEL_ID < 1 THEN 
+    DENY_ACTION(procedure_indicator || '<NULL> MODEL_ID');
+  ELSIF P_AGENCY_ID IS NULL THEN 
+    DENY_ACTION(procedure_indicator || '<NULL> AGENCY_ID');
+  ELSIF L_ENSEMBLE_ID > 0 THEN 
+    DENY_ACTION(procedure_indicator || 'EXISTING ENSEMBLE NAME');
+  END IF;
+  
+  l_agency_id := P_AGENCY_ID;
+  l_trace_domain := P_TRACE_DOMAIN;
+  l_cmmnt := P_CMMNT;
+    
+  /*  do the insert, using -1 as ensemble_id since on insert trigger will populate  */
+  BEGIN
+
+    insert into REF_ENSEMBLE RE
+    (RE.ENSEMBLE_ID,RE.ENSEMBLE_NAME,RE.AGEN_ID,RE.TRACE_DOMAIN,RE.CMMNT)
+    values (-1,P_ENSEMBLE_NAME,l_agency_id,l_trace_domain,l_cmmnt);
+  END;
+ 
+  p_ensemble_id := GET_ENSEMBLE_ID(P_ENSEMBLE_NAME);
+ 
+  for l_trace_number IN 1..p_number_traces LOOP
+    create_ref_model_run_rec(p_ensemble_name,p_model_id,p_model_run_id,l_trace_number);
+    create_ref_ensemble_trace_rec(p_ensemble_id,p_model_run_id,l_trace_number);
+  END LOOP;
+
+  commit;
+  
+end create_ensemble_id;
+
+procedure update_ensemble_id (
+p_ensemble_id IN REF_ENSEMBLE.ENSEMBLE_ID%TYPE,
+p_ensemble_name IN REF_ENSEMBLE.ENSEMBLE_NAME%TYPE,
+p_model_id IN REF_MODEL_RUN.MODEL_ID%TYPE,
+p_number_traces IN number,
+p_agency_id IN REF_ENSEMBLE.AGEN_ID%TYPE,
+p_trace_domain IN REF_ENSEMBLE.TRACE_DOMAIN%TYPE,
+p_cmmnt IN REF_ENSEMBLE.CMMNT%TYPE ) is
+
+  /* the local variables         */
+  procedure_indicator varchar2(100);
+  l_agency_id REF_ENSEMBLE.AGEN_ID%TYPE;
+  l_trace_domain REF_ENSEMBLE.TRACE_DOMAIN%TYPE DEFAULT NULL;
+  l_cmmnt REF_ENSEMBLE.CMMNT%TYPE DEFAULT NULL;
+  
+  L_MODEL_RUN_NAME REF_MODEL_RUN.MODEL_RUN_NAME%TYPE;
+  L_MODEL_RUN_ID REF_ENSEMBLE_TRACE.MODEL_RUN_ID%TYPE DEFAULT 0;
+
+  t_ensemble_name REF_ENSEMBLE.ENSEMBLE_NAME%TYPE;
+  t_agency_id REF_ENSEMBLE.AGEN_ID%TYPE;
+  t_trace_domain REF_ENSEMBLE.TRACE_DOMAIN%TYPE;
+  t_cmmnt REF_ENSEMBLE.CMMNT%TYPE;
+
+  t_number_traces number;
+  T_MODEL_RUN_ID REF_ENSEMBLE_TRACE.MODEL_RUN_ID%TYPE;
+  T_MODEL_ID REF_MODEL_RUN.MODEL_ID%TYPE DEFAULT 0;
+  
+begin
+
+ /*  This procedure was written to assist in the ENSEMBLE processing to update a record in HDB
+    in table HDB_ENSEMBLE so that the unique representation of a ENSEMBLE NAME record can be 
+    represented.
+    
+    this procedure written by Daren Critelli February 2015
+  */
+
+  procedure_indicator := 'ENSEMBLE Edit FAILED FOR: ';
+
+  /*  first do error checking  */
+  IF P_ENSEMBLE_NAME IS NULL THEN 
+    DENY_ACTION(procedure_indicator || '<NULL> ENSEMBLE_NAME');
+  ELSIF P_MODEL_ID < 1 THEN 
+    DENY_ACTION(procedure_indicator || '<NULL> MODEL_ID');
+  ELSIF P_AGENCY_ID IS NULL THEN 
+    DENY_ACTION(procedure_indicator || '<NULL> AGENCY_ID');
+  ELSIF P_ENSEMBLE_ID < 1 THEN 
+    DENY_ACTION(procedure_indicator || 'MISSING ENSEMBLE NAME');
+  END IF;
+
+  l_agency_id := P_AGENCY_ID;
+  l_trace_domain := P_TRACE_DOMAIN;
+  l_cmmnt := P_CMMNT;
+
+  select
+    RE.ENSEMBLE_NAME,RE.AGEN_ID,RE.TRACE_DOMAIN,RE.CMMNT
+    into t_ensemble_name,t_agency_id,t_trace_domain,t_cmmnt
+    from REF_ENSEMBLE RE
+    where RE.ENSEMBLE_ID = p_ensemble_id;
+
+  select count(*) into t_number_traces from REF_ENSEMBLE_TRACE RET where RET.ENSEMBLE_ID = P_ENSEMBLE_ID;
+--  dbms_output.Put_line(t_number_traces);
+
+  if t_number_traces > 0 then
+    select RET.MODEL_RUN_ID into l_model_run_id from REF_ENSEMBLE_TRACE RET where RET.ENSEMBLE_ID = P_ENSEMBLE_ID AND RET.TRACE_ID = 1;
+  end if;
+
+  if l_model_run_id > 0 then
+    select RMR.MODEL_ID into t_model_id from REF_MODEL_RUN RMR where RMR.MODEL_RUN_ID = l_model_run_id;
+  end if;
+    
+  /*  do the update */
+  BEGIN
+
+  if p_ensemble_name <> t_ensemble_name then
+    update REF_ENSEMBLE RE SET RE.ENSEMBLE_NAME = P_ENSEMBLE_NAME where RE.ENSEMBLE_ID = P_ENSEMBLE_ID;    
+        for l_trace_number IN 1..t_number_traces LOOP
+        L_MODEL_RUN_NAME := substr(P_ENSEMBLE_NAME,1,60) || substr(to_char(10000+L_TRACE_NUMBER),2,4);
+        select RET.MODEL_RUN_ID into l_model_run_id from REF_ENSEMBLE_TRACE RET where RET.ENSEMBLE_ID = P_ENSEMBLE_ID AND RET.TRACE_ID = l_trace_number;
+        update REF_MODEL_RUN RMR SET RMR.MODEL_RUN_NAME = l_model_run_name where RMR.MODEL_RUN_ID = l_model_run_id;
+        END LOOP;
+  end if;  
+ 
+  if l_agency_id <> t_agency_id then
+    update REF_ENSEMBLE RE SET RE.AGEN_ID = l_agency_id where RE.ENSEMBLE_ID = P_ENSEMBLE_ID;
+  end if; 
+
+  if l_trace_domain <> t_trace_domain OR l_trace_domain IS NULL then
+    update REF_ENSEMBLE RE SET RE.TRACE_DOMAIN = l_trace_domain where RE.ENSEMBLE_ID = P_ENSEMBLE_ID;
+  end if;  
+
+  if l_cmmnt <> t_cmmnt OR l_cmmnt IS NULL then
+    update REF_ENSEMBLE RE SET RE.CMMNT = l_cmmnt where RE.ENSEMBLE_ID = P_ENSEMBLE_ID;
+  end if;  
+  END;
+ 
+  if (t_number_traces <> p_number_traces) OR (t_model_id <> p_model_id) then
+    for l_trace_number IN 1..t_number_traces LOOP
+      select RET.MODEL_RUN_ID into l_model_run_id from REF_ENSEMBLE_TRACE RET where RET.ENSEMBLE_ID = P_ENSEMBLE_ID AND RET.TRACE_ID = l_trace_number; 
+-- delete model data
+      delete from m_hour where model_run_id = l_model_run_id;
+      delete from m_day where model_run_id = l_model_run_id;
+      delete from m_month where model_run_id = l_model_run_id;
+      delete from m_year where model_run_id = l_model_run_id;
+      delete from m_wy where model_run_id = l_model_run_id;
+-- delete all REF_MODEL_RUN_KEYVAL records for all traces related to this ensemble       
+      delete REF_MODEL_RUN_KEYVAL where model_run_id = l_model_run_id;        
+-- delete ref_model_run data
+      delete from REF_MODEL_RUN RMR where RMR.MODEL_RUN_ID = l_model_run_id;
+-- delete ref_ensemble_trace traces
+      delete from REF_ENSEMBLE_TRACE RET where RET.ENSEMBLE_ID = P_ENSEMBLE_ID AND RET.TRACE_ID = l_trace_number;
+    END LOOP;
+    for l_trace_number IN 1..p_number_traces LOOP
+-- create ref_model_run data
+      create_ref_model_run_rec(p_ensemble_name,p_model_id,l_model_run_id,l_trace_number);
+-- create ref_ensemble_trace traces
+      create_ref_ensemble_trace_rec(p_ensemble_id,l_model_run_id,l_trace_number);
+    END LOOP;
+  end if;
+
+  commit;
+
+end update_ensemble_id;
+
+end riverware_connection;
+.
+/

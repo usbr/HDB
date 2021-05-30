@@ -5,5 +5,5 @@ indexes = N
 triggers = N
 rows = Y
 constraints = N
-owner = (standard,standard_czar)
+owner = (standard,standard_czar,standard_decodes)
 log = standardDataExp.log

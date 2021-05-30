@@ -1,6 +1,6 @@
 alter table ref_site_coef_day
 add constraint ref_site_coef_day_ck1
-check (day between '1' and '366');
+check (day between '0' and '366');
 
 alter table ref_site_coef_day
 add constraint ref_site_coef_day_fk1
