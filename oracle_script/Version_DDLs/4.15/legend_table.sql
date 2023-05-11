@@ -1,5 +1,5 @@
 --------------------------------------------------------
--- This script create LEGEND table to be used applications like HDB_POET
+-- This script creates a LEGEND table to be used by applications like HDB_POET.
 -- IMPORTANT!!! This script should be executed as main schema user that owns the tables.
 -- created on 05/10/2023 by IsmailO
 --
