@@ -35,6 +35,7 @@ CREATE TABLE legend (
   GRANT SELECT,INSERT,UPDATE,DELETE ON LEGEND TO HDB_META_ROLE;
   GRANT REFERENCES ON LEGEND TO DECODES;
   GRANT SELECT ON LEGEND TO PUBLIC;
+  create public synonym LEGEND for LEGEND;
   
   
 --For UC only. Other databases will expect to fail.  
