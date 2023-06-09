@@ -115,7 +115,9 @@ BEGIN
             ELSE 'PaleGreen'
         END;
     END IF;
-
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    RETURN 'PaleGreen';
 END colorize_with_rbase;
 .
 /
