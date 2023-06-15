@@ -117,7 +117,7 @@ BEGIN
     END IF;
 EXCEPTION
   WHEN NO_DATA_FOUND THEN
-    RETURN 'PaleGreen';
+    RETURN 'LightGray';
 END colorize_with_rbase;
 .
 /

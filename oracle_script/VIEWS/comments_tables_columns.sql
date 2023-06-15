@@ -1,7 +1,7 @@
 --------------------------------------------------------------------------
 -- This script add comments on HDB_ REF_ tables and columns
 -- IMPORTANT!!! This script should be executed as main schema user that owns the tables.
--- created on 02/19/2023 by IsmailO
+-- created on 02/19/2023 by IsmailO & AndrewG
 --------------------------------------------------------------------------
 
 
