@@ -65,66 +65,59 @@ l_app_id NUMBER;
 l_comp_id NUMBER;
 l_data_flags VARCHAR2(20);
 l_collect_id NUMBER;
+l_manual_edit_app VARCHAR2(1);
 
 BEGIN
 
-  BEGIN
-  
-	select value,overwrite_flag,validation,loading_application_id,computation_id,data_flags,
-	collection_system_id
-	into l_value,l_overwrite,l_validation,l_app_id,l_comp_id,l_data_flags,l_collect_id
-	from r_base where
-	site_datatype_id = p_sdi and interval = p_interval and start_date_time = p_start_time;
-	exception when others then l_value := null;
-  END;
+    SELECT r.value,
+           r.overwrite_flag,
+           r.validation,
+           r.loading_application_id,
+           r.computation_id,
+           r.data_flags,
+           r.collection_system_id,
+           hlap.manual_edit_app
+    INTO l_value,
+         l_overwrite,
+         l_validation,
+         l_app_id,
+         l_comp_id,
+         l_data_flags,
+         l_collect_id,
+         l_manual_edit_app
+    FROM r_base r
+    JOIN hdb_loading_application hlap ON r.loading_application_id = hlap.loading_application_id
+    WHERE r.site_datatype_id = p_sdi
+      AND r.interval = p_interval
+      AND r.start_date_time = p_start_time;
 
-  IF p_value IS NULL AND l_value IS NULL THEN
+    IF p_value IS NULL AND l_value IS NULL THEN
+        RETURN 'LightGray';
+    ELSE
+        RETURN CASE
+            WHEN l_validation = 'F' THEN 'Red'
+            WHEN ABS(p_value - l_value) > 0.01 THEN 'HotPink'
+            WHEN p_value IS NOT NULL AND l_value IS NULL THEN 'DarkOrange'
+            WHEN l_app_id = 7 AND l_collect_id = 5 AND l_overwrite = 'O' THEN 'DarkTurquoise'
+            WHEN l_app_id = 7 AND l_collect_id = 5 THEN 'Aquamarine'
+            WHEN l_app_id = 7 AND l_collect_id = 9 AND l_overwrite = 'O' THEN 'DarkKhaki'
+            WHEN l_app_id = 7 AND l_collect_id = 9 THEN 'PaleGoldenrod'
+            WHEN l_manual_edit_app != 'Y' AND l_comp_id < 100 AND l_overwrite IS NULL THEN 'PaleGreen'
+            WHEN l_manual_edit_app != 'Y' AND l_comp_id < 100 AND l_overwrite = 'O' THEN 'DarkSeaGreen'
+            WHEN l_app_id IN (46) AND l_overwrite = 'O' THEN 'Purple'
+            WHEN l_app_id IN (46) THEN 'BlueViolet'
+            WHEN l_manual_edit_app = 'Y' AND l_comp_id < 100 AND l_overwrite = 'O' THEN 'RoyalBlue'
+            WHEN l_manual_edit_app = 'Y' AND l_comp_id < 100 AND l_overwrite IS NULL THEN 'SkyBlue'
+            WHEN l_app_id IN (41, 42, 47) AND l_overwrite = 'O' THEN 'Goldenrod'
+            WHEN l_app_id IN (42, 47) THEN 'Yellow'
+            WHEN l_app_id IN (41) THEN 'Gold'
+            WHEN l_data_flags IS NOT NULL THEN 'MistyRose'
+            ELSE 'PaleGreen'
+        END;
+    END IF;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
     RETURN 'LightGray';
-  ELSIF l_validation = 'F' THEN
-    RETURN 'Red';
-  ELSIF ABS(p_value - l_value) > .01 THEN
-    RETURN 'HotPink';
-  ELSIF p_value IS NOT NULL AND l_value IS NULL THEN
-    RETURN 'DarkOrange';
-  ELSIF l_app_id = 7 and l_collect_id = 5 and l_overwrite = 'O' then
-    RETURN 'DarkTurquoise'; 
-  ELSIF l_app_id = 7 and l_collect_id = 5 then
-    RETURN 'Aquamarine'; 
-  ELSIF l_app_id = 7 and l_collect_id = 9 and l_overwrite = 'O' then
-    RETURN 'DarkKhaki'; 
-  ELSIF l_app_id = 7 and l_collect_id = 9 then
-    RETURN 'PaleGoldenrod'; 
-  ELSIF l_app_id not in (31,32,33,34,35,36,37,41,42,43,44,46,47,48)
-  and l_overwrite is null THEN
--- loader applications, non manual, no overwrite  
-	RETURN  'PaleGreen';
-  ELSIF l_app_id not in (31,32,33,34,35,36,37,41,42,43,44,46,47,48)
-  and l_overwrite = 'O' THEN
--- loader applications, non manual, with overwrite  
-	RETURN  'DarkSeaGreen';
-  ELSIF l_app_id in (31,32,33,34,35,36,37,41,43,44,46,47,48) and
-	l_overwrite = 'O' THEN
--- manual edits with overwrites	
-	RETURN 'RoyalBlue';
-  ELSIF l_app_id in (31,32,33,34,35,36,37,43,44,46,48) and 
--- manual edits without overwrites	
-	l_overwrite IS NULL THEN
-    RETURN 'SkyBlue';
-  ELSIF l_app_id in (41,42,47) and l_overwrite = 'O' THEN
--- other  CP processes, DECODES with overwrite
-	RETURN 'Goldenrod';
-  ELSIF l_app_id in (42,47) THEN
--- other  CP processes without overwrite
-    RETURN 'Yellow';
-  ELSIF l_app_id in (41) THEN
--- derivation APPlication   
-	RETURN 'Gold';
-  ELSIF l_data_flags IS NOT NULL THEN
-    RETURN 'MistyRose';
-  ELSE
-    RETURN 'PaleGreen';
-  END IF;
-
 END colorize_with_rbase;
 .
 /

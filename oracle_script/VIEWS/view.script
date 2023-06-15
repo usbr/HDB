@@ -14,7 +14,7 @@ start ./VIEWS/days.view
 start ./VIEWS/dba_roles.view
 start ./VIEWS/hdb_datatype_unit.view
 start ./VIEWS/hdb_site_datatype_name.view
-
+start ./VIEWS/comments_tables_columns.sql
 
 spool off
 exit;
