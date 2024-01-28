@@ -1,0 +1,191 @@
+
+--Profile work steps 	
+--Generate users with profiles for each db environment, put it in excel , work with customer and make sure users belong to correct profile
+	alter session set NLS_TIMESTAMP_TZ_FORMAT='DD-MON-YYYY';
+	select username,account_status,expiry_date,created,profile,last_login, s.ptime as last_passwd_change_time
+	from dba_users u, SYS.USER$ s
+	where 
+	u.username=s.name and
+	u.oracle_maintained='N'
+	and u.username not in ('OWBSYS_AUDIT','OWBSYS','SQLTXPLAIN','SQLTXADMIN')
+	order by profile,username;
+
+
+-- Custom HDB_VERIFY_FUNCTION password requirements
+The password contains no fewer than 17 characters and includes at least 1 numeric and 1 upper & lower alphabetic character.
+The password differs from the previous password by at least 4 characters.
+(no special character requirement)
+
+
+--Create Verify Function per USBR requirement
+  CREATE OR REPLACE  FUNCTION "SYS"."HDB_VERIFY_FUNCTION" 
+ ( username varchar2,
+   password varchar2,
+   old_password varchar2)
+ return boolean IS
+   differ integer;
+begin
+   if not ora_complexity_check(password, chars => 17, upper => 1, lower => 1,
+                           digit => 1, special => 0) then
+      return(false);
+   end if;
+
+   -- Check if the password differs from the previous password by at least
+   -- 4 characters
+   if old_password is not null then
+      differ := ora_string_distance(old_password, password);
+      if differ < 4 then
+         raise_application_error(-20033, 'The new password should differ '
+					|| 'from the previous password by '
+					|| 'at least 4 characters.');
+      end if;
+   end if;
+
+   return(true);
+end;
+GRANT EXECUTE ON "SYS"."HDB_VERIFY_FUNCTION" TO PUBLIC;
+
+
+	
+
+--Alter/Create new profiles
+
+ALTER PROFILE "DEFAULT" LIMIT CPU_PER_SESSION UNLIMITED
+CPU_PER_CALL UNLIMITED
+CONNECT_TIME 180000
+IDLE_TIME 1440
+SESSIONS_PER_USER 10
+LOGICAL_READS_PER_SESSION UNLIMITED
+LOGICAL_READS_PER_CALL UNLIMITED
+PRIVATE_SGA UNLIMITED
+COMPOSITE_LIMIT UNLIMITED
+PASSWORD_LIFE_TIME 60
+PASSWORD_GRACE_TIME 0
+PASSWORD_REUSE_MAX 14
+PASSWORD_REUSE_TIME 24
+PASSWORD_LOCK_TIME UNLIMITED
+FAILED_LOGIN_ATTEMPTS 3
+PASSWORD_VERIFY_FUNCTION HDB_VERIFY_FUNCTION;
+
+
+CREATE PROFILE "HDB_USER_PROFILE" LIMIT CPU_PER_SESSION DEFAULT
+CPU_PER_CALL DEFAULT
+CONNECT_TIME DEFAULT
+IDLE_TIME DEFAULT
+SESSIONS_PER_USER 10
+LOGICAL_READS_PER_SESSION DEFAULT
+LOGICAL_READS_PER_CALL DEFAULT
+PRIVATE_SGA DEFAULT
+COMPOSITE_LIMIT DEFAULT
+PASSWORD_LIFE_TIME 60
+PASSWORD_GRACE_TIME 0
+PASSWORD_REUSE_MAX 14
+PASSWORD_REUSE_TIME 24
+PASSWORD_LOCK_TIME UNLIMITED
+FAILED_LOGIN_ATTEMPTS 3
+PASSWORD_VERIFY_FUNCTION HDB_VERIFY_FUNCTION;
+
+CREATE PROFILE "HDB_APP_PROFILE" LIMIT CPU_PER_SESSION DEFAULT
+CPU_PER_CALL DEFAULT
+CONNECT_TIME DEFAULT
+IDLE_TIME DEFAULT
+SESSIONS_PER_USER 200
+LOGICAL_READS_PER_SESSION DEFAULT
+LOGICAL_READS_PER_CALL DEFAULT
+PRIVATE_SGA DEFAULT
+COMPOSITE_LIMIT DEFAULT
+PASSWORD_LIFE_TIME 60
+PASSWORD_GRACE_TIME 0
+PASSWORD_REUSE_MAX 14
+PASSWORD_REUSE_TIME 24
+PASSWORD_LOCK_TIME UNLIMITED
+FAILED_LOGIN_ATTEMPTS 3
+PASSWORD_VERIFY_FUNCTION HDB_VERIFY_FUNCTION;
+
+
+CREATE PROFILE "HDB_ADMIN_PROFILE" LIMIT CPU_PER_SESSION DEFAULT
+CPU_PER_CALL DEFAULT
+CONNECT_TIME DEFAULT
+IDLE_TIME DEFAULT
+SESSIONS_PER_USER 100
+LOGICAL_READS_PER_SESSION DEFAULT
+LOGICAL_READS_PER_CALL DEFAULT
+PRIVATE_SGA DEFAULT
+COMPOSITE_LIMIT DEFAULT
+PASSWORD_LIFE_TIME UNLIMITED
+PASSWORD_GRACE_TIME 0
+PASSWORD_REUSE_MAX DEFAULT
+PASSWORD_REUSE_TIME DEFAULT
+PASSWORD_LOCK_TIME UNLIMITED
+FAILED_LOGIN_ATTEMPTS 3
+PASSWORD_VERIFY_FUNCTION HDB_VERIFY_FUNCTION;
+
+
+--move app users to the new APPLICATION_PROFILE
+--run this output to change old application profile to new one
+--your db old application profile name might differ, please modify below script accordingly.
+
+select 'Alter user ' || u.username || ' profile ??????? ;'
+	from dba_users u
+	where 
+	u.oracle_maintained='N'
+    and u.profile='<<APPL_DEFAULT>>'
+	and u.username not in ('OWBSYS_AUDIT','OWBSYS','SQLTXPLAIN','SQLTXADMIN')
+	order by profile,username;
+
+
+--Resolve issues if there is any
+
+--Drop old profiles
+--make sure no users using old profiles, then drop them
+	select username,profile
+	from dba_users
+	where profile in ('APP_USER_PROFILE','BOR_ADMIN','HDB','HDB_TEMP','SCHEMA','SERVICE', )
+	order by 1;
+
+	drop profile APP_USER_PROFILE;
+	drop profile BOR_ADMIN;
+	drop profile HDB;
+	drop profile HDB_TEMP;
+	drop profile SCHEMA;
+	drop profile SERVICE;
+
+
+--info
+FAILED_LOGIN_ATTEMPTS	Maximum times the user is allowed in fail login before locking the user account
+PASSWORD_LIFE_TIME	Number of days the password is valid before expiry
+PASSWORD_REUSE_TIME	Number of day after the user can use the already used password
+PASSWORD_REUSE_MAX	Number of times the user can use the already used password
+PASSWORD_LOCK_TIME	Number of days the user account remains locked after failed login
+PASSWORD_GRACE_TIME	Number of grace days for user to change password
+PASSWORD_VERIFY_FUNCTION	PL/SQL function that can be used for password verification
+SESSIONS_PER_USER	Specify the number of concurrent sessions to which you want to limit the user.
+CPU_PER_SESSION	Specify the CPU time limit for a session, expressed in hundredth of seconds.
+CPU_PER_CALL	Specify the CPU time limit for a call (a parse, execute, or fetch), expressed in hundredths of seconds.
+CONNECT_TIME	Specify the total elapsed time limit for a session, expressed in minutes.
+IDLE_TIME	Specify the permitted periods of continuous inactive time during a session, expressed in minutes. Long-running queries and other
+operations are not subject to this limit.
+LOGICAL_READS_PER_SESSION	Specify the permitted number of data blocks read in a session, including blocks read from memory and disk.
+LOGICAL_READS_PER_CALL	Specify the permitted the number of data blocks read for a call to process a SQL statement (a parse, execute, or fetch).
+PRIVATE_SGA	Specify the amount of private space a session can allocate in the shared pool of the system global area (SGA), expressed in bytes.
+COMPOSITE_LIMIT	Specify the total resource cost for a session, expressed in service units. Oracle Database calculates the total service units as a weighted sum of CPU_PER_SESSION, CONNECT_TIME, LOGICAL_READS_PER_SESSION, and PRIVATE_SGA.
+
+
+
+
+--How to Refresh the Latest Expiration Time After Updated Profile Limit PASSWORD_LIFE_TIME (Doc ID 2623228.1)
+
+The PASSWORD_LIFE_TIME limit of a profile is measured from the last time an account's password was changed or the account creation time if the password has never been changed. These are the dates USER$.PTIME and USER$.CTIME respectively. It is NOT measured from the current time, as may be initially thought. Therefore, any accounts affected by the changed profile whose last password change time was more than PASSWORD_LIFE_TIME days ago immediately expire and enter their grace period on their next connection, issuing the ORA-28002 warning.
+
+
+
+
+
+
+
+
+
+
+
+
+
